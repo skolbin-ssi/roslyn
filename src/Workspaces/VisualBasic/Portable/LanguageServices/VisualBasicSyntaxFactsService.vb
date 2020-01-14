@@ -1333,6 +1333,11 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
             Return TryCast(node, ExpressionSyntax).IsLeftSideOfAnyAssignStatement
         End Function
 
+        Public Function IsLeftSideOfCompoundAssignment(node As SyntaxNode) As Boolean Implements ISyntaxFactsService.IsLeftSideOfCompoundAssignment
+            ' VB does not support compound assignments.
+            Return False
+        End Function
+
         Public Function GetRightHandSideOfAssignment(node As SyntaxNode) As SyntaxNode Implements ISyntaxFactsService.GetRightHandSideOfAssignment
             Return TryCast(node, AssignmentStatementSyntax)?.Right
         End Function
@@ -1513,7 +1518,9 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
             Return False
         End Function
 
-        Public Sub AddFirstMissingCloseBrace(root As SyntaxNode, contextNode As SyntaxNode, ByRef newRoot As SyntaxNode, ByRef newContextNode As SyntaxNode) Implements ISyntaxFactsService.AddFirstMissingCloseBrace
+        Public Sub AddFirstMissingCloseBrace(Of TContextNode As SyntaxNode)(
+                root As SyntaxNode, contextNode As TContextNode,
+                ByRef newRoot As SyntaxNode, ByRef newContextNode As TContextNode) Implements ISyntaxFactsService.AddFirstMissingCloseBrace
             ' Nothing to be done.  VB doesn't have close braces
             newRoot = root
             newContextNode = contextNode
