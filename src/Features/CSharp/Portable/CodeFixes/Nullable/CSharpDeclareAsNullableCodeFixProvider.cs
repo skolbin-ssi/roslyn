@@ -65,7 +65,7 @@ namespace Microsoft.CodeAnalysis.CSharp.CodeFixes.DeclareAsNullable
             SyntaxEditor editor, CancellationToken cancellationToken)
         {
             // a method can have multiple `return null;` statements, but we should only fix its return type once
-            var alreadyHandled = PooledHashSet<TypeSyntax>.GetInstance();
+            using var _ = PooledHashSet<TypeSyntax>.GetInstance(out var alreadyHandled);
 
             foreach (var diagnostic in diagnostics)
             {
@@ -73,14 +73,13 @@ namespace Microsoft.CodeAnalysis.CSharp.CodeFixes.DeclareAsNullable
                 MakeDeclarationNullable(editor, node, alreadyHandled);
             }
 
-            alreadyHandled.Free();
             return Task.CompletedTask;
         }
 
-        protected override bool IncludeDiagnosticDuringFixAll(FixAllState state, Diagnostic diagnostic, CancellationToken cancellationToken)
+        protected override bool IncludeDiagnosticDuringFixAll(Diagnostic diagnostic, Document document, string equivalenceKey, CancellationToken cancellationToken)
         {
             var node = diagnostic.Location.FindNode(getInnermostNodeForTie: true, cancellationToken);
-            return state.CodeActionEquivalenceKey == GetEquivalenceKey(node);
+            return equivalenceKey == GetEquivalenceKey(node);
         }
 
         private static void MakeDeclarationNullable(SyntaxEditor editor, SyntaxNode node, HashSet<TypeSyntax> alreadyHandled)
