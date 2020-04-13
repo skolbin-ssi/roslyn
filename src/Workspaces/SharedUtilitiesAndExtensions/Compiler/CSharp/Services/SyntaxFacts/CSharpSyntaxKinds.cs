@@ -4,7 +4,9 @@
 
 #nullable enable
 
-namespace Microsoft.CodeAnalysis.CSharp
+using Microsoft.CodeAnalysis.LanguageServices;
+
+namespace Microsoft.CodeAnalysis.CSharp.LanguageServices
 {
     internal class CSharpSyntaxKinds : ISyntaxKinds
     {
@@ -23,6 +25,8 @@ namespace Microsoft.CodeAnalysis.CSharp
         public int EndOfLineTrivia => (int)SyntaxKind.EndOfLineTrivia;
         public int SkippedTokensTrivia => (int)SyntaxKind.SkippedTokensTrivia;
         public int WhitespaceTrivia => (int)SyntaxKind.WhitespaceTrivia;
+        public int SingleLineCommentTrivia => (int)SyntaxKind.SingleLineCommentTrivia;
+        public int? MultiLineCommentTrivia => (int)SyntaxKind.MultiLineCommentTrivia;
 
         public int CharacterLiteralToken => (int)SyntaxKind.CharacterLiteralToken;
         public int DotToken => (int)SyntaxKind.DotToken;
@@ -43,6 +47,7 @@ namespace Microsoft.CodeAnalysis.CSharp
         public int BaseExpression => (int)SyntaxKind.BaseExpression;
         public int CharacterLiteralExpression => (int)SyntaxKind.CharacterLiteralExpression;
         public int ConditionalAccessExpression => (int)SyntaxKind.ConditionalAccessExpression;
+        public int ConditionalExpression => (int)SyntaxKind.ConditionalExpression;
         public int DefaultLiteralExpression => (int)SyntaxKind.DefaultLiteralExpression;
         public int FalseLiteralExpression => (int)SyntaxKind.FalseLiteralExpression;
         public int InvocationExpression => (int)SyntaxKind.InvocationExpression;

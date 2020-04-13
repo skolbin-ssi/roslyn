@@ -5,6 +5,8 @@
 Imports System.Composition
 Imports Microsoft.CodeAnalysis.CodeFixes
 Imports Microsoft.CodeAnalysis.ConflictMarkerResolution
+Imports Microsoft.CodeAnalysis.Host.Mef
+Imports Microsoft.CodeAnalysis.VisualBasic.LanguageServices
 
 Namespace Microsoft.CodeAnalysis.VisualBasic.ConflictMarkerResolution
     <ExportCodeFixProvider(LanguageNames.VisualBasic), [Shared]>
@@ -14,6 +16,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.ConflictMarkerResolution
         Private Const BC37284 As String = NameOf(BC37284)
 
         <ImportingConstructor>
+        <Obsolete(MefConstruction.ImportingConstructorMessage, True)>
         Public Sub New()
             MyBase.New(VisualBasicSyntaxKinds.Instance, BC37284)
         End Sub

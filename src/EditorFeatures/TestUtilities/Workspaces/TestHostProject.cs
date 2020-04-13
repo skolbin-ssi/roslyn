@@ -27,7 +27,6 @@ namespace Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces
         private readonly string _assemblyName;
         private readonly Type _hostObjectType;
         private readonly VersionStamp _version;
-        private readonly string _filePath;
         private readonly string _outputFilePath;
         private readonly string _defaultNamespace;
 
@@ -35,6 +34,7 @@ namespace Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces
         public IEnumerable<TestHostDocument> AdditionalDocuments;
         public IEnumerable<TestHostDocument> AnalyzerConfigDocuments;
         public IEnumerable<ProjectReference> ProjectReferences;
+        private string _filePath;
 
         public string Name
         {
@@ -123,6 +123,9 @@ namespace Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces
                 return _filePath;
             }
         }
+
+        internal void OnProjectFilePathChanged(string filePath)
+            => _filePath = filePath;
 
         public string OutputFilePath
         {
@@ -299,9 +302,7 @@ namespace Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces
         }
 
         internal void RemoveDocument(TestHostDocument document)
-        {
-            this.Documents = this.Documents.Where(d => d != document);
-        }
+            => this.Documents = this.Documents.Where(d => d != document);
 
         internal void AddAdditionalDocument(TestHostDocument document)
         {
@@ -310,9 +311,7 @@ namespace Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces
         }
 
         internal void RemoveAdditionalDocument(TestHostDocument document)
-        {
-            this.AdditionalDocuments = this.AdditionalDocuments.Where(d => d != document);
-        }
+            => this.AdditionalDocuments = this.AdditionalDocuments.Where(d => d != document);
 
         internal void AddAnalyzerConfigDocument(TestHostDocument document)
         {
@@ -321,9 +320,7 @@ namespace Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces
         }
 
         internal void RemoveAnalyzerConfigDocument(TestHostDocument document)
-        {
-            this.AnalyzerConfigDocuments = this.AnalyzerConfigDocuments.Where(d => d != document);
-        }
+            => this.AnalyzerConfigDocuments = this.AnalyzerConfigDocuments.Where(d => d != document);
 
         public string Language
         {

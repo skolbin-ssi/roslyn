@@ -311,9 +311,7 @@ namespace Microsoft.CodeAnalysis.ChangeNamespace
         }
 
         private static ImmutableArray<string> GetNamespaceParts(string @namespace)
-        {
-            return @namespace?.Split(s_dotSeparator).ToImmutableArray() ?? default;
-        }
+            => @namespace?.Split(s_dotSeparator).ToImmutableArray() ?? default;
 
         private static ImmutableArray<string> GetAllNamespaceImportsForDeclaringDocument(string oldNamespace, string newNamespace)
         {
@@ -381,7 +379,7 @@ namespace Microsoft.CodeAnalysis.ChangeNamespace
 
             var refLocations = await Task.WhenAll(
                 declaredSymbols.Select(declaredSymbol
-                    => FindReferenceLocationsForSymbol(document, declaredSymbol, cancellationToken))).ConfigureAwait(false);
+                    => FindReferenceLocationsForSymbolAsync(document, declaredSymbol, cancellationToken))).ConfigureAwait(false);
 
             foreach (var refLocation in refLocations.SelectMany(locs => locs))
             {
@@ -442,50 +440,44 @@ namespace Microsoft.CodeAnalysis.ChangeNamespace
             public Document Document => ReferenceLocation.Document;
         }
 
-        private static async Task<ImmutableArray<LocationForAffectedSymbol>> FindReferenceLocationsForSymbol(
+        private static async Task<ImmutableArray<LocationForAffectedSymbol>> FindReferenceLocationsForSymbolAsync(
             Document document, ISymbol symbol, CancellationToken cancellationToken)
         {
-            var builder = ArrayBuilder<LocationForAffectedSymbol>.GetInstance();
-            try
-            {
-                var referencedSymbols = await FindReferencesAsync(symbol, document, cancellationToken).ConfigureAwait(false);
-                builder.AddRange(referencedSymbols
-                    .Where(refSymbol => refSymbol.Definition.Equals(symbol))
-                    .SelectMany(refSymbol => refSymbol.Locations)
-                    .Select(location => new LocationForAffectedSymbol(location, isReferenceToExtensionMethod: false)));
+            using var _ = ArrayBuilder<LocationForAffectedSymbol>.GetInstance(out var builder);
 
-                // So far we only have references to types declared in affected namespace. We also need to 
-                // handle invocation of extension methods (in reduced form) that are declared in those types. 
-                // Therefore additional calls to find references are needed for those extension methods.
-                // This will returns all the references, not just in the reduced form. But we will
-                // not further distinguish the usage. In the worst case, those references are redundant because
-                // they are already covered by the type references found above.
-                if (symbol is INamedTypeSymbol typeSymbol && typeSymbol.MightContainExtensionMethods)
+            var referencedSymbols = await FindReferencesAsync(symbol, document, cancellationToken).ConfigureAwait(false);
+            builder.AddRange(referencedSymbols
+                .Where(refSymbol => refSymbol.Definition.Equals(symbol))
+                .SelectMany(refSymbol => refSymbol.Locations)
+                .Select(location => new LocationForAffectedSymbol(location, isReferenceToExtensionMethod: false)));
+
+            // So far we only have references to types declared in affected namespace. We also need to 
+            // handle invocation of extension methods (in reduced form) that are declared in those types. 
+            // Therefore additional calls to find references are needed for those extension methods.
+            // This will returns all the references, not just in the reduced form. But we will
+            // not further distinguish the usage. In the worst case, those references are redundant because
+            // they are already covered by the type references found above.
+            if (symbol is INamedTypeSymbol typeSymbol && typeSymbol.MightContainExtensionMethods)
+            {
+                foreach (var methodSymbol in typeSymbol.GetMembers().OfType<IMethodSymbol>())
                 {
-                    foreach (var methodSymbol in typeSymbol.GetMembers().OfType<IMethodSymbol>())
+                    if (methodSymbol.IsExtensionMethod)
                     {
-                        if (methodSymbol.IsExtensionMethod)
-                        {
-                            var referencedMethodSymbols = await FindReferencesAsync(methodSymbol, document, cancellationToken).ConfigureAwait(false);
-                            builder.AddRange(referencedMethodSymbols
-                                .SelectMany(refSymbol => refSymbol.Locations)
-                                .Select(location => new LocationForAffectedSymbol(location, isReferenceToExtensionMethod: true)));
-                        }
+                        var referencedMethodSymbols = await FindReferencesAsync(methodSymbol, document, cancellationToken).ConfigureAwait(false);
+                        builder.AddRange(referencedMethodSymbols
+                            .SelectMany(refSymbol => refSymbol.Locations)
+                            .Select(location => new LocationForAffectedSymbol(location, isReferenceToExtensionMethod: true)));
                     }
                 }
+            }
 
-                return builder.ToImmutable();
-            }
-            finally
-            {
-                builder.Free();
-            }
+            return builder.ToImmutable();
         }
 
         private static async Task<ImmutableArray<ReferencedSymbol>> FindReferencesAsync(ISymbol symbol, Document document, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var progress = new StreamingProgressCollector(StreamingFindReferencesProgress.Instance);
+            var progress = new StreamingProgressCollector();
             await SymbolFinder.FindReferencesAsync(
                 symbolAndProjectId: SymbolAndProjectId.Create(symbol, document.Project.Id),
                 solution: document.Project.Solution,

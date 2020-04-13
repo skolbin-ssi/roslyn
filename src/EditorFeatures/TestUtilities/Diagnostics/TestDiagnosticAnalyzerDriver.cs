@@ -10,9 +10,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Editor.UnitTests.Diagnostics;
-using Microsoft.CodeAnalysis.Host;
+using Microsoft.CodeAnalysis.Execution;
 using Microsoft.CodeAnalysis.PooledObjects;
 using Microsoft.CodeAnalysis.Remote;
+using Microsoft.CodeAnalysis.Serialization;
 using Microsoft.CodeAnalysis.Text;
 using Roslyn.Utilities;
 using Xunit;
@@ -46,8 +47,8 @@ namespace Microsoft.CodeAnalysis.UnitTests.Diagnostics
             }
 
             var analyzer = DiagnosticExtensions.GetCompilerDiagnosticAnalyzer(project.Language);
-            var analyzerService = project.Solution.Workspace.Services.GetService<IAnalyzerService>();
-            var analyzerReferences = ImmutableArray.Create<AnalyzerReference>(new AnalyzerFileReference(analyzer.GetType().Assembly.Location, analyzerService.GetLoader()));
+            var loader = new DefaultAnalyzerAssemblyLoader();
+            var analyzerReferences = ImmutableArray.Create<AnalyzerReference>(new AnalyzerFileReference(analyzer.GetType().Assembly.Location, loader));
 
             return new TestDiagnosticAnalyzerService(analyzerReferences, _exceptionDiagnosticsSource);
         }
@@ -93,9 +94,7 @@ namespace Microsoft.CodeAnalysis.UnitTests.Diagnostics
         }
 
         public Task<IEnumerable<Diagnostic>> GetAllDiagnosticsAsync(Document document, TextSpan? filterSpan)
-        {
-            return GetDiagnosticsAsync(document.Project, document, filterSpan, getDocumentDiagnostics: true, getProjectDiagnostics: true);
-        }
+            => GetDiagnosticsAsync(document.Project, document, filterSpan, getDocumentDiagnostics: true, getProjectDiagnostics: true);
 
         public async Task<IEnumerable<Diagnostic>> GetAllDiagnosticsAsync(Project project)
         {
@@ -113,14 +112,10 @@ namespace Microsoft.CodeAnalysis.UnitTests.Diagnostics
         }
 
         public Task<IEnumerable<Diagnostic>> GetDocumentDiagnosticsAsync(Document document, TextSpan span)
-        {
-            return GetDiagnosticsAsync(document.Project, document, span, getDocumentDiagnostics: true, getProjectDiagnostics: false);
-        }
+            => GetDiagnosticsAsync(document.Project, document, span, getDocumentDiagnostics: true, getProjectDiagnostics: false);
 
         public Task<IEnumerable<Diagnostic>> GetProjectDiagnosticsAsync(Project project)
-        {
-            return GetDiagnosticsAsync(project, document: null, filterSpan: default, getDocumentDiagnostics: false, getProjectDiagnostics: true);
-        }
+            => GetDiagnosticsAsync(project, document: null, filterSpan: null, getDocumentDiagnostics: false, getProjectDiagnostics: true);
 
         private async Task SynchronizeGlobalAssetToRemoteHostIfNeededAsync(Workspace workspace)
         {
@@ -147,10 +142,10 @@ namespace Microsoft.CodeAnalysis.UnitTests.Diagnostics
         {
             var builder = ArrayBuilder<Checksum>.GetInstance();
 
-            var snapshotService = workspace.Services.GetService<CodeAnalysis.Execution.IRemotableDataService>();
-            var assetBuilder = new CodeAnalysis.Execution.CustomAssetBuilder(workspace);
+            var snapshotService = workspace.Services.GetService<IRemotableDataService>();
+            var serializer = workspace.Services.GetService<ISerializerService>();
 
-            foreach (var (_, reference) in _diagnosticAnalyzerService.AnalyzerInfoCache.GetHostAnalyzerReferencesMap())
+            foreach (var (_, reference) in _diagnosticAnalyzerService.HostAnalyzers.GetHostAnalyzerReferencesMap())
             {
                 if (!(reference is AnalyzerFileReference))
                 {
@@ -158,7 +153,7 @@ namespace Microsoft.CodeAnalysis.UnitTests.Diagnostics
                     continue;
                 }
 
-                var asset = assetBuilder.Build(reference, CancellationToken.None);
+                var asset = WorkspaceAnalyzerReferenceAsset.Create(reference, serializer, CancellationToken.None);
 
                 builder.Add(asset.Checksum);
                 snapshotService.AddGlobalAsset(reference, asset, CancellationToken.None);

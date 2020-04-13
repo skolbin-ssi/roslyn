@@ -1467,11 +1467,11 @@ namespace Microsoft.CodeAnalysis.CSharp
                                                                                         HostObjectType.Name,
                                                                                         useCLSCompliantNameArityEncoding: true);
 
-                    symbol = new MissingMetadataTypeSymbol.TopLevelWithCustomErrorInfo(
+                    symbol = new MissingMetadataTypeSymbol.TopLevel(
                         new MissingAssemblySymbol(AssemblyIdentity.FromAssemblyDefinition(HostObjectType.GetTypeInfo().Assembly)).Modules[0],
                         ref mdName,
-                        CreateReflectionTypeNotFoundError(HostObjectType),
-                        SpecialType.None);
+                        SpecialType.None,
+                        CreateReflectionTypeNotFoundError(HostObjectType));
                 }
 
                 Interlocked.CompareExchange(ref _lazyHostObjectTypeSymbol, symbol, null);
@@ -2069,10 +2069,11 @@ namespace Microsoft.CodeAnalysis.CSharp
                 WeakReference<BinderFactory>? previousWeakReference = slot;
                 if (previousWeakReference != null && previousWeakReference.TryGetTarget(out previousFactory))
                 {
+                    Debug.Assert(slot is object);
                     return previousFactory;
                 }
 
-                if (Interlocked.CompareExchange(ref slot, newWeakReference, previousWeakReference) == previousWeakReference)
+                if (Interlocked.CompareExchange(ref slot!, newWeakReference, previousWeakReference) == previousWeakReference)
                 {
                     return newFactory;
                 }
@@ -2808,7 +2809,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             CommonPEModuleBuilder moduleBuilder,
             Stream? xmlDocStream,
             Stream? win32Resources,
-            string outputNameOverride,
+            string? outputNameOverride,
             DiagnosticBag diagnostics,
             CancellationToken cancellationToken)
         {
@@ -2833,7 +2834,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             // Use a temporary bag so we don't have to refilter pre-existing diagnostics.
             DiagnosticBag? xmlDiagnostics = DiagnosticBag.GetInstance();
 
-            string assemblyName = FileNameUtilities.ChangeExtension(outputNameOverride, extension: null);
+            string? assemblyName = FileNameUtilities.ChangeExtension(outputNameOverride, extension: null);
             DocumentationCommentCompiler.WriteDocumentationCommentXml(this, assemblyName, xmlDocStream, xmlDiagnostics, cancellationToken);
 
             return FilterAndAppendAndFreeDiagnostics(diagnostics, ref xmlDiagnostics);
@@ -2891,7 +2892,7 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         internal string? GetRuntimeMetadataVersion(EmitOptions emitOptions, DiagnosticBag diagnostics)
         {
-            string runtimeMDVersion = GetRuntimeMetadataVersion(emitOptions);
+            string? runtimeMDVersion = GetRuntimeMetadataVersion(emitOptions);
             if (runtimeMDVersion != null)
             {
                 return runtimeMDVersion;
@@ -2907,7 +2908,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             return string.Empty; //prevent emitter from crashing.
         }
 
-        private string GetRuntimeMetadataVersion(EmitOptions emitOptions)
+        private string? GetRuntimeMetadataVersion(EmitOptions emitOptions)
         {
             var corAssembly = Assembly.CorLibrary as Symbols.Metadata.PE.PEAssemblySymbol;
 
@@ -3152,6 +3153,16 @@ namespace Microsoft.CodeAnalysis.CSharp
         protected override IPointerTypeSymbol CommonCreatePointerTypeSymbol(ITypeSymbol elementType)
         {
             return CreatePointerTypeSymbol(elementType.EnsureCSharpSymbolOrNull(nameof(elementType)), elementType.NullableAnnotation.ToInternalAnnotation()).GetPublicSymbol();
+        }
+
+        protected override INamedTypeSymbol CommonCreateNativeIntegerTypeSymbol(bool signed)
+        {
+            return CreateNativeIntegerTypeSymbol(signed).GetPublicSymbol();
+        }
+
+        new internal NamedTypeSymbol CreateNativeIntegerTypeSymbol(bool signed)
+        {
+            return GetSpecialType(signed ? SpecialType.System_IntPtr : SpecialType.System_UIntPtr).AsNativeInteger();
         }
 
         protected override INamedTypeSymbol CommonCreateTupleTypeSymbol(

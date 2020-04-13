@@ -36,7 +36,7 @@ namespace Microsoft.CodeAnalysis.IntroduceUsingStatement
         public override async Task ComputeRefactoringsAsync(CodeRefactoringContext context)
         {
             var (document, span, cancellationToken) = context;
-            var declarationSyntax = await FindDisposableLocalDeclaration(document, span, cancellationToken).ConfigureAwait(false);
+            var declarationSyntax = await FindDisposableLocalDeclarationAsync(document, span, cancellationToken).ConfigureAwait(false);
 
             if (declarationSyntax != null)
             {
@@ -48,12 +48,12 @@ namespace Microsoft.CodeAnalysis.IntroduceUsingStatement
             }
         }
 
-        private async Task<TLocalDeclarationSyntax> FindDisposableLocalDeclaration(Document document, TextSpan selection, CancellationToken cancellationToken)
+        private async Task<TLocalDeclarationSyntax> FindDisposableLocalDeclarationAsync(Document document, TextSpan selection, CancellationToken cancellationToken)
         {
             var declarationSyntax = await document.TryGetRelevantNodeAsync<TLocalDeclarationSyntax>(selection, cancellationToken).ConfigureAwait(false);
             if (declarationSyntax is null || !CanRefactorToContainBlockStatements(declarationSyntax.Parent))
             {
-                return default;
+                return null;
             }
 
             var semanticModel = await document.GetSemanticModelAsync(cancellationToken).ConfigureAwait(false);
@@ -61,19 +61,19 @@ namespace Microsoft.CodeAnalysis.IntroduceUsingStatement
             var disposableType = semanticModel.Compilation.GetSpecialType(SpecialType.System_IDisposable);
             if (disposableType is null)
             {
-                return default;
+                return null;
             }
 
             var operation = semanticModel.GetOperation(declarationSyntax, cancellationToken) as IVariableDeclarationGroupOperation;
             if (operation?.Declarations.Length != 1)
             {
-                return default;
+                return null;
             }
 
             var localDeclaration = operation.Declarations[0];
             if (localDeclaration.Declarators.Length != 1)
             {
-                return default;
+                return null;
             }
 
             var declarator = localDeclaration.Declarators[0];
@@ -81,7 +81,7 @@ namespace Microsoft.CodeAnalysis.IntroduceUsingStatement
             var localType = declarator.Symbol?.Type;
             if (localType is null)
             {
-                return default;
+                return null;
             }
 
             var initializer = (localDeclaration.Initializer ?? declarator.Initializer)?.Value;
@@ -89,12 +89,12 @@ namespace Microsoft.CodeAnalysis.IntroduceUsingStatement
             // Initializer kind is invalid when incomplete declaration syntax ends in an equals token.
             if (initializer is null || initializer.Kind == OperationKind.Invalid)
             {
-                return default;
+                return null;
             }
 
             if (!IsLegalUsingStatementType(semanticModel.Compilation, disposableType, localType))
             {
-                return default;
+                return null;
             }
 
             return declarationSyntax;
@@ -223,7 +223,7 @@ namespace Microsoft.CodeAnalysis.IntroduceUsingStatement
                 .ToImmutableArray();
 
             // List of local variables that will be in the order they are declared.
-            var localVariables = ArrayBuilder<ISymbol>.GetInstance();
+            using var _0 = ArrayBuilder<ISymbol>.GetInstance(out var localVariables);
 
             // Map a symbol to an index into the statementsFromDeclarationToEnd array.
             using var _1 = PooledDictionary<ISymbol, int>.GetInstance(out var variableDeclarationIndex);
@@ -281,8 +281,6 @@ namespace Microsoft.CodeAnalysis.IntroduceUsingStatement
                 // usage.
                 endOfUsingStatementIndex = Math.Max(endOfUsingStatementIndex, lastVariableUsageIndex[localSymbol]);
             }
-
-            localVariables.Free();
 
             return statementsFromDeclarationToEnd[endOfUsingStatementIndex];
         }
