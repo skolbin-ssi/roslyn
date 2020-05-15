@@ -18,6 +18,7 @@ variables:
     value: .NETCore
   - name: _DotNetValidationArtifactsCategory
     value: .NETCoreValidation
+  - group: DotNet-Roslyn-SDLValidation-Params
 
 stages:
 - stage: build
@@ -102,7 +103,6 @@ stages:
                 -officialSourceBranchName $(SourceBranchName)
                 -officialIbcSourceBranchName $(IbcSourceBranchName)
                 -officialIbcDropId $(IbcDropId)
-                -skipAnalyzers
                 /p:RepositoryName=$(Build.Repository.Name)
                 /p:VisualStudioDropAccessToken=$(System.AccessToken)
                 /p:VisualStudioDropName=$(VisualStudio.DropName)
@@ -291,3 +291,17 @@ stages:
       enableSourceLinkValidation: false
       validateDependsOn:
         - SetValidateDependency
+      # Enable SDL validation, passing through values from the 'DotNet-Roslyn-SDLValidation-Params' group.
+      SDLValidationParameters:
+        enable: true
+        params: >-
+          -SourceToolsList @("policheck","credscan")
+          -TsaInstanceURL $(_TsaInstanceURL)
+          -TsaProjectName $(_TsaProjectName)
+          -TsaNotificationEmail $(_TsaNotificationEmail)
+          -TsaCodebaseAdmin $(_TsaCodebaseAdmin)
+          -TsaBugAreaPath $(_TsaBugAreaPath)
+          -TsaIterationPath $(_TsaIterationPath)
+          -TsaRepositoryName $(_TsaRepositoryName)
+          -TsaCodebaseName $(_TsaCodebaseName)
+          -TsaPublish $True

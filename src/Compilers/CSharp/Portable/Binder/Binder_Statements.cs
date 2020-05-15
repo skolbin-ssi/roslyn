@@ -7,8 +7,6 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Linq;
-using System.Threading.Tasks;
-using System.Transactions;
 using Microsoft.CodeAnalysis.CSharp.Symbols;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.PooledObjects;
@@ -971,10 +969,9 @@ namespace Microsoft.CodeAnalysis.CSharp
             bool nameConflict = localSymbol.ScopeBinder.ValidateDeclarationNameConflictsInScope(localSymbol, diagnostics);
             bool hasErrors = false;
 
-            var containingMethod = this.ContainingMemberOrLambda as MethodSymbol;
-            if (containingMethod != null && containingMethod.IsAsync && localSymbol.RefKind != RefKind.None)
+            if (localSymbol.RefKind != RefKind.None)
             {
-                Error(diagnostics, ErrorCode.ERR_BadAsyncLocalType, declarator);
+                CheckRefLocalInAsyncOrIteratorMethod(localSymbol.IdentifierToken, diagnostics);
             }
 
             EqualsValueClauseSyntax equalsClauseSyntax = declarator.Initializer;
@@ -1150,6 +1147,22 @@ namespace Microsoft.CodeAnalysis.CSharp
                 argumentsOpt: arguments,
                 inferredType: isVar,
                 hasErrors: hasErrors | nameConflict);
+        }
+
+        protected bool CheckRefLocalInAsyncOrIteratorMethod(SyntaxToken identifierToken, DiagnosticBag diagnostics)
+        {
+            if (IsInAsyncMethod())
+            {
+                Error(diagnostics, ErrorCode.ERR_BadAsyncLocalType, identifierToken);
+                return true;
+            }
+            else if (IsDirectlyInIterator)
+            {
+                Error(diagnostics, ErrorCode.ERR_BadIteratorLocalType, identifierToken);
+                return true;
+            }
+
+            return false;
         }
 
         internal ImmutableArray<BoundExpression> BindDeclaratorArguments(VariableDeclaratorSyntax declarator, DiagnosticBag diagnostics)
@@ -1733,14 +1746,6 @@ namespace Microsoft.CodeAnalysis.CSharp
                 else
                 {
                     Debug.Assert(!diagnostics.IsEmptyWithoutResolution);
-                }
-
-                foreach (var local in locals)
-                {
-                    if (local.RefKind != RefKind.None)
-                    {
-                        diagnostics.Add(ErrorCode.ERR_BadIteratorLocalType, local.Locations[0]);
-                    }
                 }
             }
 
@@ -3155,7 +3160,7 @@ namespace Microsoft.CodeAnalysis.CSharp
         }
 
         /// <summary>
-        /// Binds an expression-bodied member with expression e as either { return e;} or { e; }.
+        /// Binds an expression-bodied member with expression e as either { return e; } or { e; }.
         /// </summary>
         internal virtual BoundBlock BindExpressionBodyAsBlock(ArrowExpressionClauseSyntax expressionBody,
                                                       DiagnosticBag diagnostics)
@@ -3179,7 +3184,7 @@ namespace Microsoft.CodeAnalysis.CSharp
         }
 
         /// <summary>
-        /// Binds a lambda with expression e as either { return e;} or { e; }.
+        /// Binds a lambda with expression e as either { return e; } or { e; }.
         /// </summary>
         public BoundBlock BindLambdaExpressionAsBlock(ExpressionSyntax body, DiagnosticBag diagnostics)
         {
@@ -3193,6 +3198,15 @@ namespace Microsoft.CodeAnalysis.CSharp
             expression = ValidateEscape(expression, Binder.ExternalScope, refKind != RefKind.None, diagnostics);
 
             return bodyBinder.CreateBlockFromExpression(body, bodyBinder.GetDeclaredLocalsForScope(body), refKind, expression, expressionSyntax, diagnostics);
+        }
+
+        public BoundBlock CreateBlockFromExpression(ExpressionSyntax body, BoundExpression expression, DiagnosticBag diagnostics)
+        {
+            Binder bodyBinder = this.GetBinder(body);
+            Debug.Assert(bodyBinder != null);
+
+            Debug.Assert(body.Kind() != SyntaxKind.RefExpression);
+            return bodyBinder.CreateBlockFromExpression(body, bodyBinder.GetDeclaredLocalsForScope(body), RefKind.None, expression, body, diagnostics);
         }
 
         private BindValueKind GetRequiredReturnValueKind(RefKind refKind)

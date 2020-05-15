@@ -144,7 +144,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                     ArrowExpressionClauseSyntax arrowClause => InferTypeInArrowExpressionClause(arrowClause),
                     AssignmentExpressionSyntax assignmentExpression => InferTypeInBinaryOrAssignmentExpression(assignmentExpression, assignmentExpression.OperatorToken, assignmentExpression.Left, assignmentExpression.Right, expression),
                     AttributeArgumentSyntax attribute => InferTypeInAttributeArgument(attribute),
-                    AttributeSyntax attribute => InferTypeInAttribute(),
+                    AttributeSyntax _ => InferTypeInAttribute(),
                     AwaitExpressionSyntax awaitExpression => InferTypeInAwaitExpression(awaitExpression),
                     BinaryExpressionSyntax binaryExpression => InferTypeInBinaryOrAssignmentExpression(binaryExpression, binaryExpression.OperatorToken, binaryExpression.Left, binaryExpression.Right, expression),
                     CastExpressionSyntax castExpression => InferTypeInCastExpression(castExpression, expression),
@@ -156,7 +156,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                     ConstantPatternSyntax constantPattern => InferTypeInConstantPattern(constantPattern),
                     DoStatementSyntax doStatement => InferTypeInDoStatement(doStatement),
                     EqualsValueClauseSyntax equalsValue => InferTypeInEqualsValueClause(equalsValue),
-                    ExpressionStatementSyntax expressionStatement => InferTypeInExpressionStatement(expressionStatement),
+                    ExpressionStatementSyntax _ => InferTypeInExpressionStatement(),
                     ForEachStatementSyntax forEachStatement => InferTypeInForEachStatement(forEachStatement, expression),
                     ForStatementSyntax forStatement => InferTypeInForStatement(forStatement, expression),
                     IfStatementSyntax ifStatement => InferTypeInIfStatement(ifStatement),
@@ -170,7 +170,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                     PostfixUnaryExpressionSyntax postfixUnary => InferTypeInPostfixUnaryExpression(postfixUnary),
                     PrefixUnaryExpressionSyntax prefixUnary => InferTypeInPrefixUnaryExpression(prefixUnary),
                     RecursivePatternSyntax propertyPattern => InferTypeInRecursivePattern(propertyPattern),
-                    PropertyPatternClauseSyntax propertySubpattern => InferTypeInPropertyPatternClause(propertySubpattern, node),
+                    PropertyPatternClauseSyntax propertySubpattern => InferTypeInPropertyPatternClause(propertySubpattern),
                     RefExpressionSyntax refExpression => InferTypeInRefExpression(refExpression),
                     ReturnStatementSyntax returnStatement => InferTypeForReturnStatement(returnStatement),
                     SubpatternSyntax subpattern => InferTypeInSubpattern(subpattern, node),
@@ -220,11 +220,11 @@ namespace Microsoft.CodeAnalysis.CSharp
                     DefaultExpressionSyntax defaultExpression => InferTypeInDefaultExpression(defaultExpression),
                     DoStatementSyntax doStatement => InferTypeInDoStatement(doStatement, token),
                     EqualsValueClauseSyntax equalsValue => InferTypeInEqualsValueClause(equalsValue, token),
-                    ExpressionStatementSyntax expressionStatement => InferTypeInExpressionStatement(expressionStatement, token),
+                    ExpressionStatementSyntax _ => InferTypeInExpressionStatement(token),
                     ForEachStatementSyntax forEachStatement => InferTypeInForEachStatement(forEachStatement, previousToken: token),
                     ForStatementSyntax forStatement => InferTypeInForStatement(forStatement, previousToken: token),
                     IfStatementSyntax ifStatement => InferTypeInIfStatement(ifStatement, token),
-                    ImplicitArrayCreationExpressionSyntax implicitArray => InferTypeInImplicitArrayCreation(implicitArray, token),
+                    ImplicitArrayCreationExpressionSyntax implicitArray => InferTypeInImplicitArrayCreation(implicitArray),
                     InitializerExpressionSyntax initializerExpression => InferTypeInInitializerExpression(initializerExpression, previousToken: token),
                     LockStatementSyntax lockStatement => InferTypeInLockStatement(lockStatement, token),
                     MemberAccessExpressionSyntax memberAccessExpression => InferTypeInMemberAccessExpression(memberAccessExpression, previousToken: token),
@@ -467,7 +467,22 @@ namespace Microsoft.CodeAnalysis.CSharp
                         SemanticModel.GetMemberGroup(invocation.Expression, CancellationToken)
                                      .OfType<IMethodSymbol>();
 
-                    methods = methods.Concat(memberGroupMethods).Distinct();
+                    methods = methods.Concat(memberGroupMethods).Distinct().ToList();
+                }
+
+                // Special case: if this is an argument in Enum.HasFlag, infer the Enum type that we're invoking into,
+                // as otherwise we infer "Enum" which isn't useful
+                if (methods.Any(IsEnumHasFlag))
+                {
+                    if (invocation.Expression is MemberAccessExpressionSyntax memberAccess)
+                    {
+                        var typeInfo = SemanticModel.GetTypeInfo(memberAccess.Expression, CancellationToken);
+
+                        if (typeInfo.Type != null && typeInfo.Type.IsEnumType())
+                        {
+                            return CreateResult(typeInfo.Type);
+                        }
+                    }
                 }
 
                 return InferTypeInArgument(index, methods, argumentOpt, invocation);
@@ -1102,12 +1117,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                     }
                     else if (symbol.IsReferenceType)
                     {
-#if CODE_STYLE
-                        // TODO: Remove the #if once WithNullableAnnotation is available.
-                        return symbol;
-#else
                         return symbol.WithNullableAnnotation(NullableAnnotation.Annotated);
-#endif
                     }
                     else // it's neither a value nor reference type, so is an unconstrained generic
                     {
@@ -1192,7 +1202,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 return CreateResult(typeInfo.Type);
             }
 
-            private IEnumerable<TypeInferenceInfo> InferTypeInExpressionStatement(ExpressionStatementSyntax expressionStatement, SyntaxToken? previousToken = null)
+            private IEnumerable<TypeInferenceInfo> InferTypeInExpressionStatement(SyntaxToken? previousToken = null)
             {
                 // If we're position based, then that means we're after the semicolon.  In this case
                 // we don't have any sort of type to infer.
@@ -1258,7 +1268,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 return CreateResult(SpecialType.System_Boolean);
             }
 
-            private IEnumerable<TypeInferenceInfo> InferTypeInImplicitArrayCreation(ImplicitArrayCreationExpressionSyntax implicitArray, SyntaxToken previousToken)
+            private IEnumerable<TypeInferenceInfo> InferTypeInImplicitArrayCreation(ImplicitArrayCreationExpressionSyntax implicitArray)
                 => InferTypes(implicitArray.SpanStart);
 
             private IEnumerable<TypeInferenceInfo> InferTypeInInitializerExpression(
@@ -1422,8 +1432,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
 
             private IEnumerable<TypeInferenceInfo> InferTypeInPropertyPatternClause(
-                PropertyPatternClauseSyntax propertySubpattern,
-                SyntaxNode child)
+                PropertyPatternClauseSyntax propertySubpattern)
             {
                 return InferTypes(propertySubpattern);
             }
@@ -1531,14 +1540,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
 
             private static ImmutableArray<NullableAnnotation> GetNullableAnnotations(ImmutableArray<ITypeSymbol> elementTypes)
-            {
-                return
-#if CODE_STYLE // TODO: Remove the #if once NullableAnnotation is available.
-                    default;
-#else
-                    elementTypes.SelectAsArray(e => e.NullableAnnotation);
-#endif
-            }
+                => elementTypes.SelectAsArray(e => e.NullableAnnotation);
 
             private IEnumerable<TypeInferenceInfo> InferTypeInLockStatement(LockStatementSyntax lockStatement, SyntaxToken? previousToken = null)
             {
