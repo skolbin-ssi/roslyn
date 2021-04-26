@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -47,11 +49,6 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.Venus
                     return excerpter;
                 }
 
-                if (DesignTimeOnlyDocumentPropertiesService.Instance is TService documentPropertiesService)
-                {
-                    return documentPropertiesService;
-                }
-
                 // ask the default document service provider
                 return DefaultTextDocumentServiceProvider.Instance.GetService<TService>();
             }
@@ -59,18 +56,17 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.Venus
             private static ITextSnapshot GetRoslynSnapshot(SourceText sourceText)
                 => sourceText.FindCorrespondingEditorTextSnapshot();
 
-            private sealed class DesignTimeOnlyDocumentPropertiesService : DocumentPropertiesService
-            {
-                public static readonly DesignTimeOnlyDocumentPropertiesService Instance = new DesignTimeOnlyDocumentPropertiesService();
-                public override bool DesignTimeOnly => true;
-            }
-
             private class SpanMapper : ISpanMappingService
             {
                 private readonly ITextBuffer _primaryBuffer;
 
                 public SpanMapper(ITextBuffer primaryBuffer)
                     => _primaryBuffer = primaryBuffer;
+
+                /// <summary>
+                /// Legacy venus does not support us adding import directives and them mapping them to their own concepts.
+                /// </summary>
+                public bool SupportsMappingImportDirectives => false;
 
                 public async Task<ImmutableArray<MappedSpanResult>> MapSpansAsync(Document document, IEnumerable<TextSpan> spans, CancellationToken cancellationToken)
                 {
@@ -172,8 +168,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.Venus
                     // anything based on content is starting from 0
                     var startPositionOnContentSpan = GetNonWhitespaceStartPositionOnContent(contentSpanOnPrimarySnapshot);
 
-                    using var pooledObject = SharedPools.Default<List<ClassifiedSpan>>().GetPooledObject();
-                    var list = pooledObject.Object;
+                    using var _1 = ArrayBuilder<ClassifiedSpan>.GetInstance(out var list);
 
                     foreach (var roslynSpan in primarySnapshot.MapToSourceSnapshots(contentSpanOnPrimarySnapshot.Span))
                     {
@@ -216,7 +211,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.Venus
                     //
                     // the EditorClassifier call above fills all the gaps for the span it is called with, but we are combining
                     // multiple spans with html code, so we need to fill those gaps
-                    var builder = ArrayBuilder<ClassifiedSpan>.GetInstance();
+                    using var _2 = ArrayBuilder<ClassifiedSpan>.GetInstance(out var builder);
                     ClassifierHelper.FillInClassifiedSpanGaps(startPositionOnContentSpan, list, builder);
 
                     // add html after roslyn content if there is any
@@ -227,14 +222,14 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.Venus
                     }
                     else
                     {
-                        var lastSpan = builder[builder.Count - 1].TextSpan;
+                        var lastSpan = builder[^1].TextSpan;
                         if (lastSpan.End < contentSpan.Length)
                         {
                             builder.Add(new ClassifiedSpan(new TextSpan(lastSpan.End, contentSpan.Length - lastSpan.End), ClassificationTypeNames.Text));
                         }
                     }
 
-                    return builder.ToImmutableAndFree();
+                    return builder.ToImmutable();
                 }
 
                 private static int GetNonWhitespaceStartPositionOnContent(SnapshotSpan spanOnPrimarySnapshot)
@@ -304,7 +299,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.Venus
                 }
 
                 private static TextSpan GetSpanOnContent(TextSpan targetSpan, TextSpan excerptSpan)
-                    => new TextSpan(targetSpan.Start - excerptSpan.Start, targetSpan.Length);
+                    => new(targetSpan.Start - excerptSpan.Start, targetSpan.Length);
             }
         }
     }

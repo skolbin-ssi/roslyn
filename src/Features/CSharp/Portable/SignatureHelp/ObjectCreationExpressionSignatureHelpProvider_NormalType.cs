@@ -17,7 +17,7 @@ namespace Microsoft.CodeAnalysis.CSharp.SignatureHelp
 {
     internal partial class ObjectCreationExpressionSignatureHelpProvider
     {
-        private (IList<SignatureHelpItem> items, int? selectedItem) GetNormalTypeConstructors(
+        private static (IList<SignatureHelpItem> items, int? selectedItem) GetNormalTypeConstructors(
             Document document,
             BaseObjectCreationExpressionSyntax objectCreationExpression,
             SemanticModel semanticModel,
@@ -33,7 +33,7 @@ namespace Microsoft.CodeAnalysis.CSharp.SignatureHelp
                                                    .Sort(semanticModel, objectCreationExpression.SpanStart);
 
             var symbolInfo = semanticModel.GetSymbolInfo(objectCreationExpression, cancellationToken);
-            var selectedItem = TryGetSelectedIndex(accessibleConstructors, symbolInfo);
+            var selectedItem = TryGetSelectedIndex(accessibleConstructors, symbolInfo.Symbol);
 
             var items = accessibleConstructors.SelectAsArray(c =>
                 ConvertNormalTypeConstructor(c, objectCreationExpression, semanticModel, anonymousTypeDisplayService, documentationCommentFormattingService));
@@ -41,7 +41,7 @@ namespace Microsoft.CodeAnalysis.CSharp.SignatureHelp
             return (items, selectedItem);
         }
 
-        private SignatureHelpItem ConvertNormalTypeConstructor(
+        private static SignatureHelpItem ConvertNormalTypeConstructor(
             IMethodSymbol constructor,
             BaseObjectCreationExpressionSyntax objectCreationExpression,
             SemanticModel semanticModel,
@@ -62,7 +62,7 @@ namespace Microsoft.CodeAnalysis.CSharp.SignatureHelp
             return item;
         }
 
-        private IList<SymbolDisplayPart> GetNormalTypePreambleParts(
+        private static IList<SymbolDisplayPart> GetNormalTypePreambleParts(
             IMethodSymbol method,
             SemanticModel semanticModel,
             int position)
@@ -75,7 +75,7 @@ namespace Microsoft.CodeAnalysis.CSharp.SignatureHelp
             return result;
         }
 
-        private IList<SymbolDisplayPart> GetNormalTypePostambleParts()
+        private static IList<SymbolDisplayPart> GetNormalTypePostambleParts()
         {
             return SpecializedCollections.SingletonList(
                 Punctuation(SyntaxKind.CloseParenToken));

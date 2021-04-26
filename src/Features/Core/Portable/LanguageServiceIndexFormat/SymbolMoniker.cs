@@ -2,8 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-#nullable enable
-
 using System;
 
 namespace Microsoft.CodeAnalysis.LanguageServerIndexFormat
@@ -70,6 +68,7 @@ namespace Microsoft.CodeAnalysis.LanguageServerIndexFormat
 
             static string GetRequiredDocumentationCommentId(ISymbol symbol)
             {
+                symbol = symbol.OriginalDefinition;
                 var documentationCommentId = symbol.GetDocumentationCommentId();
 
                 if (documentationCommentId == null)

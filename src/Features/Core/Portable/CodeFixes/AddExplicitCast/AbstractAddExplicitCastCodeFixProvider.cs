@@ -2,8 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-#nullable enable
-
 using System;
 using System.Collections.Immutable;
 using System.Linq;
@@ -110,7 +108,7 @@ namespace Microsoft.CodeAnalysis.CodeFixes.AddExplicitCast
                 context.Diagnostics);
         }
 
-        private string GetSubItemName(SemanticModel semanticModel, int position, ITypeSymbol conversionType)
+        private static string GetSubItemName(SemanticModel semanticModel, int position, ITypeSymbol conversionType)
         {
             return string.Format(
                 FeaturesResources.Convert_type_to_0,
@@ -149,7 +147,6 @@ namespace Microsoft.CodeAnalysis.CodeFixes.AddExplicitCast
                     continue;
                 }
 
-
                 validPotentialConversionTypes.Add(conversionTuple);
             }
 
@@ -178,7 +175,7 @@ namespace Microsoft.CodeAnalysis.CodeFixes.AddExplicitCast
             var root = await document.GetRequiredSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
             var spanNodes = diagnostics.SelectAsArray(
                 d => root.FindNode(d.Location.SourceSpan, getInnermostNodeForTie: true)
-                         .GetAncestorsOrThis<TExpressionSyntax>().FirstOrDefault());
+                         .GetAncestorsOrThis<TExpressionSyntax>().First());
 
             await editor.ApplyExpressionLevelSemanticEditsAsync(
                 document, spanNodes,

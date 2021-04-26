@@ -8,6 +8,7 @@ using System.Collections.Immutable;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.CodeAnalysis.Host;
 using Microsoft.CodeAnalysis.Internal.Log;
 using Microsoft.CodeAnalysis.Options;
 using Microsoft.CodeAnalysis.PooledObjects;
@@ -35,7 +36,7 @@ namespace Microsoft.CodeAnalysis.Rename
                 RenameOptionSet.From(solution, optionSet),
                 nonConflictSymbols: null, cancellationToken).ConfigureAwait(false);
 
-            // This is a public entrypoint.  So if rename failed to resolve conflicts, we report that back to caller as
+            // This is a public entry-point.  So if rename failed to resolve conflicts, we report that back to caller as
             // an exception.
             if (resolution.ErrorMessage != null)
                 throw new ArgumentException(resolution.ErrorMessage);
@@ -66,13 +67,19 @@ namespace Microsoft.CodeAnalysis.Rename
         public static async Task<RenameDocumentActionSet> RenameDocumentAsync(
             Document document,
             string newDocumentName,
-            IReadOnlyList<string> newDocumentFolders = null,
-            OptionSet optionSet = null,
+            IReadOnlyList<string>? newDocumentFolders = null,
+            OptionSet? optionSet = null,
             CancellationToken cancellationToken = default)
         {
             if (document is null)
             {
                 throw new ArgumentNullException(nameof(document));
+            }
+
+            if (document.Services.GetService<ISpanMappingService>() != null)
+            {
+                // Don't advertise that we can file rename generated documents that map to a different file.
+                return new RenameDocumentActionSet(ImmutableArray<RenameDocumentAction>.Empty, document.Id, document.Name, document.Folders.ToImmutableArray(), document.Project.Solution.Options);
             }
 
             using var _ = ArrayBuilder<RenameDocumentAction>.GetInstance(out var actions);
@@ -109,7 +116,7 @@ namespace Microsoft.CodeAnalysis.Rename
             ISymbol symbol,
             string newName,
             RenameOptionSet optionSet,
-            ImmutableHashSet<ISymbol> nonConflictSymbols,
+            ImmutableHashSet<ISymbol>? nonConflictSymbols,
             CancellationToken cancellationToken)
         {
             Contract.ThrowIfNull(solution);
@@ -120,28 +127,29 @@ namespace Microsoft.CodeAnalysis.Rename
 
             using (Logger.LogBlock(FunctionId.Renamer_RenameSymbolAsync, cancellationToken))
             {
-                var project = solution.GetOriginatingProject(symbol);
-                if (project != null)
+                if (SerializableSymbolAndProjectId.TryCreate(symbol, solution, cancellationToken, out var serializedSymbol))
                 {
                     var client = await RemoteHostClient.TryGetClientAsync(solution.Workspace, cancellationToken).ConfigureAwait(false);
                     if (client != null)
                     {
-                        var result = await client.TryRunRemoteAsync<SerializableConflictResolution>(
-                            WellKnownServiceHubServices.CodeAnalysisService,
-                            nameof(IRemoteRenamer.RenameSymbolAsync),
+                        var options = SerializableRenameOptionSet.Dehydrate(optionSet);
+                        var nonConflictSymbolIds = nonConflictSymbols?.SelectAsArray(s => SerializableSymbolAndProjectId.Dehydrate(solution, s, cancellationToken)) ?? default;
+
+                        var result = await client.TryInvokeAsync<IRemoteRenamerService, SerializableConflictResolution?>(
                             solution,
-                            new object[]
-                            {
-                                SerializableSymbolAndProjectId.Create(symbol, project, cancellationToken),
+                            (service, solutionInfo, cancellationToken) => service.RenameSymbolAsync(
+                                solutionInfo,
+                                serializedSymbol,
                                 newName,
-                                SerializableRenameOptionSet.Dehydrate(optionSet),
-                                nonConflictSymbols?.Select(s => SerializableSymbolAndProjectId.Dehydrate(solution, s, cancellationToken)).ToArray(),
-                            },
-                            callbackTarget: null,
+                                options,
+                                nonConflictSymbolIds,
+                                cancellationToken),
                             cancellationToken).ConfigureAwait(false);
 
-                        if (result.HasValue)
+                        if (result.HasValue && result.Value != null)
                             return await result.Value.RehydrateAsync(solution, cancellationToken).ConfigureAwait(false);
+
+                        // TODO: do not fall back to in-proc if client is available (https://github.com/dotnet/roslyn/issues/47557)
                     }
                 }
             }
@@ -156,7 +164,7 @@ namespace Microsoft.CodeAnalysis.Rename
             ISymbol symbol,
             string newName,
             RenameOptionSet optionSet,
-            ImmutableHashSet<ISymbol> nonConflictSymbols,
+            ImmutableHashSet<ISymbol>? nonConflictSymbols,
             CancellationToken cancellationToken)
         {
             Contract.ThrowIfNull(solution);

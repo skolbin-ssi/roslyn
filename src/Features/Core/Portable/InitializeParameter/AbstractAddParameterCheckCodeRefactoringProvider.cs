@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -46,6 +48,8 @@ namespace Microsoft.CodeAnalysis.InitializeParameter
 
         protected abstract bool CanOffer(SyntaxNode body);
         protected abstract bool PrefersThrowExpression(DocumentOptionSet options);
+        protected abstract string EscapeResourceString(string input);
+        protected abstract TStatementSyntax CreateParameterCheckIfStatement(DocumentOptionSet options, TExpressionSyntax condition, TStatementSyntax ifTrueStatement);
 
         protected override async Task<ImmutableArray<CodeAction>> GetRefactoringsForAllParametersAsync(
             Document document, SyntaxNode functionDeclaration, IMethodSymbol methodSymbol,
@@ -73,8 +77,9 @@ namespace Microsoft.CodeAnalysis.InitializeParameter
 
             // Great.  The list has parameters that need null checks. Offer to add null checks for all.
             return ImmutableArray.Create<CodeAction>(new MyCodeAction(
-                 FeaturesResources.Add_null_checks_for_all_parameters,
-                     c => UpdateDocumentForRefactoringAsync(document, blockStatementOpt, listOfParametersOrdinals, parameterSpan, c)));
+                FeaturesResources.Add_null_checks_for_all_parameters,
+                c => UpdateDocumentForRefactoringAsync(document, blockStatementOpt, listOfParametersOrdinals, parameterSpan, c),
+                nameof(FeaturesResources.Add_null_checks_for_all_parameters)));
         }
 
         protected override async Task<ImmutableArray<CodeAction>> GetRefactoringsForSingleParameterAsync(
@@ -90,10 +95,11 @@ namespace Microsoft.CodeAnalysis.InitializeParameter
             }
 
             // Great.  There was no null check.  Offer to add one.
-            var result = ArrayBuilder<CodeAction>.GetInstance();
+            using var _ = ArrayBuilder<CodeAction>.GetInstance(out var result);
             result.Add(new MyCodeAction(
                 FeaturesResources.Add_null_check,
-                c => AddNullCheckAsync(document, parameter, functionDeclaration, methodSymbol, blockStatementOpt, c)));
+                c => AddNullCheckAsync(document, parameter, functionDeclaration, methodSymbol, blockStatementOpt, c),
+                nameof(FeaturesResources.Add_null_check)));
 
             // Also, if this was a string, offer to add the special checks to 
             // string.IsNullOrEmpty and string.IsNullOrWhitespace.
@@ -101,14 +107,16 @@ namespace Microsoft.CodeAnalysis.InitializeParameter
             {
                 result.Add(new MyCodeAction(
                     FeaturesResources.Add_string_IsNullOrEmpty_check,
-                    c => AddStringCheckAsync(document, parameter, functionDeclaration, methodSymbol, blockStatementOpt, nameof(string.IsNullOrEmpty), c)));
+                    c => AddStringCheckAsync(document, parameter, functionDeclaration, methodSymbol, blockStatementOpt, nameof(string.IsNullOrEmpty), c),
+                    nameof(FeaturesResources.Add_string_IsNullOrEmpty_check)));
 
                 result.Add(new MyCodeAction(
                     FeaturesResources.Add_string_IsNullOrWhiteSpace_check,
-                    c => AddStringCheckAsync(document, parameter, functionDeclaration, methodSymbol, blockStatementOpt, nameof(string.IsNullOrWhiteSpace), c)));
+                    c => AddStringCheckAsync(document, parameter, functionDeclaration, methodSymbol, blockStatementOpt, nameof(string.IsNullOrWhiteSpace), c),
+                    nameof(FeaturesResources.Add_string_IsNullOrWhiteSpace_check)));
             }
 
-            return result.ToImmutableAndFree();
+            return result.ToImmutable();
         }
 
         private async Task<Document> UpdateDocumentForRefactoringAsync(
@@ -152,7 +160,7 @@ namespace Microsoft.CodeAnalysis.InitializeParameter
             return document;
         }
 
-        private IParameterSymbol GetParameterAtOrdinal(int index, IReadOnlyList<SyntaxNode> parameterNodes, SemanticModel semanticModel, CancellationToken cancellationToken)
+        private static IParameterSymbol GetParameterAtOrdinal(int index, IReadOnlyList<SyntaxNode> parameterNodes, SemanticModel semanticModel, CancellationToken cancellationToken)
         {
             foreach (var parameterNode in parameterNodes)
             {
@@ -166,7 +174,7 @@ namespace Microsoft.CodeAnalysis.InitializeParameter
             return null;
         }
 
-        private bool ContainsNullCoalesceCheck(
+        private static bool ContainsNullCoalesceCheck(
             ISyntaxFactsService syntaxFacts, SemanticModel semanticModel,
             IOperation statement, IParameterSymbol parameter,
             CancellationToken cancellationToken)
@@ -191,7 +199,7 @@ namespace Microsoft.CodeAnalysis.InitializeParameter
             return false;
         }
 
-        private bool IsIfNullCheck(IOperation statement, IParameterSymbol parameter)
+        private static bool IsIfNullCheck(IOperation statement, IParameterSymbol parameter)
         {
             if (statement is IConditionalOperation ifStatement)
             {
@@ -235,6 +243,11 @@ namespace Microsoft.CodeAnalysis.InitializeParameter
                 return false;
             }
 
+            if (parameter.RefKind == RefKind.Out)
+            {
+                return false;
+            }
+
             var syntaxFacts = document.GetLanguageService<ISyntaxFactsService>();
 
             // Look for an existing "if (p == null)" statement, or "p ?? throw" check.  If we already
@@ -269,7 +282,7 @@ namespace Microsoft.CodeAnalysis.InitializeParameter
             return true;
         }
 
-        private bool IsStringCheck(IOperation condition, IParameterSymbol parameter)
+        private static bool IsStringCheck(IOperation condition, IParameterSymbol parameter)
         {
             if (condition is IInvocationOperation invocation &&
                 invocation.Arguments.Length == 1 &&
@@ -286,9 +299,8 @@ namespace Microsoft.CodeAnalysis.InitializeParameter
             return false;
         }
 
-        private bool IsNullCheck(IOperation operand1, IOperation operand2, IParameterSymbol parameter)
+        private static bool IsNullCheck(IOperation operand1, IOperation operand2, IParameterSymbol parameter)
             => UnwrapImplicitConversion(operand1).IsNullLiteral() && IsParameterReference(operand2, parameter);
-
 
         private async Task<Document> AddNullCheckAsync(
             Document document,
@@ -308,9 +320,10 @@ namespace Microsoft.CodeAnalysis.InitializeParameter
             }
 
             // If we can't, then just offer to add an "if (s == null)" statement.
+            var optionSet = await document.GetOptionsAsync(cancellationToken).ConfigureAwait(false);
             return await AddNullCheckStatementAsync(
                 document, parameter, functionDeclaration, method, blockStatementOpt,
-                (s, g) => CreateNullCheckStatement(s, g, parameter),
+                (s, g) => CreateNullCheckStatement(optionSet, s, g, parameter),
                 cancellationToken).ConfigureAwait(false);
         }
 
@@ -323,9 +336,10 @@ namespace Microsoft.CodeAnalysis.InitializeParameter
             string methodName,
             CancellationToken cancellationToken)
         {
+            var optionSet = await document.GetOptionsAsync(cancellationToken).ConfigureAwait(false);
             return await AddNullCheckStatementAsync(
                 document, parameter, functionDeclaration, method, blockStatementOpt,
-                (s, g) => CreateStringCheckStatement(s.Compilation, g, parameter, methodName),
+                (s, g) => CreateStringCheckStatement(optionSet, s.Compilation, g, parameter, methodName),
                 cancellationToken).ConfigureAwait(false);
         }
 
@@ -362,28 +376,30 @@ namespace Microsoft.CodeAnalysis.InitializeParameter
             return document.WithSyntaxRoot(newRoot);
         }
 
-        private static TStatementSyntax CreateNullCheckStatement(SemanticModel semanticModel, SyntaxGenerator generator, IParameterSymbol parameter)
-            => (TStatementSyntax)generator.CreateNullCheckAndThrowStatement(semanticModel, parameter);
+        private TStatementSyntax CreateNullCheckStatement(DocumentOptionSet optionSet, SemanticModel semanticModel, SyntaxGenerator generator, IParameterSymbol parameter)
+            => CreateParameterCheckIfStatement(
+                optionSet,
+                (TExpressionSyntax)generator.CreateNullCheckExpression(semanticModel, parameter.Name),
+                (TStatementSyntax)generator.CreateThrowArgumentNullExceptionStatement(semanticModel.Compilation, parameter));
 
-        private static TStatementSyntax CreateStringCheckStatement(
-            Compilation compilation, SyntaxGenerator generator,
+        private TStatementSyntax CreateStringCheckStatement(
+            DocumentOptionSet optionSet, Compilation compilation, SyntaxGenerator generator,
             IParameterSymbol parameter, string methodName)
         {
             var stringType = compilation.GetSpecialType(SpecialType.System_String);
 
             // generates: if (string.IsXXX(s)) throw new ArgumentException("message", nameof(s))
-            return (TStatementSyntax)generator.IfStatement(
-                generator.InvocationExpression(
-                    generator.MemberAccessExpression(
-                        generator.TypeExpression(stringType),
-                        generator.IdentifierName(methodName)),
-                    generator.Argument(generator.IdentifierName(parameter.Name))),
-                SpecializedCollections.SingletonEnumerable(
-                    generator.ThrowStatement(
-                        CreateArgumentException(compilation, generator, parameter, methodName))));
+            var condition = (TExpressionSyntax)generator.InvocationExpression(
+                                generator.MemberAccessExpression(
+                                    generator.TypeExpression(stringType),
+                                    generator.IdentifierName(methodName)),
+                                generator.Argument(generator.IdentifierName(parameter.Name)));
+            var throwStatement = (TStatementSyntax)generator.ThrowStatement(CreateArgumentException(compilation, generator, parameter, methodName));
+
+            return CreateParameterCheckIfStatement(optionSet, condition, throwStatement);
         }
 
-        private SyntaxNode GetStatementToAddNullCheckAfter(
+        private static SyntaxNode GetStatementToAddNullCheckAfter(
             SemanticModel semanticModel,
             IParameterSymbol parameter,
             IBlockOperation blockStatementOpt,
@@ -431,7 +447,7 @@ namespace Microsoft.CodeAnalysis.InitializeParameter
         /// in some way.  If we find a match, we'll place our new null-check statement before/after
         /// this statement as appropriate.
         /// </summary>
-        private IOperation TryFindParameterCheckStatement(
+        private static IOperation TryFindParameterCheckStatement(
             SemanticModel semanticModel,
             IParameterSymbol parameterSymbol,
             IBlockOperation blockStatementOpt,
@@ -537,7 +553,7 @@ namespace Microsoft.CodeAnalysis.InitializeParameter
                 generator.NameOfExpression(generator.IdentifierName(parameter.Name)));
         }
 
-        private static SyntaxNode CreateArgumentException(
+        private SyntaxNode CreateArgumentException(
             Compilation compilation, SyntaxGenerator generator, IParameterSymbol parameter, string methodName)
         {
             var text = methodName switch
@@ -547,22 +563,26 @@ namespace Microsoft.CodeAnalysis.InitializeParameter
                 _ => throw ExceptionUtilities.Unreachable,
             };
 
+            // The resource string is written to be shown in a UI and is not necessarily valid code, but we're
+            // going to be putting it into a string literal so we need to escape quotes etc. to avoid syntax errors
+            var escapedText = EscapeResourceString(text);
+
             using var _ = ArrayBuilder<SyntaxNode>.GetInstance(out var content);
 
             var nameofExpression = generator.NameOfExpression(generator.IdentifierName(parameter.Name));
 
-            const string Placeholder = "{0}";
-            var placeholderIndex = text.IndexOf(Placeholder);
-            if (placeholderIndex < 0)
+            var textParts = GetPreAndPostTextParts(text);
+            var escapedTextParts = GetPreAndPostTextParts(escapedText);
+            if (textParts.pre is null)
             {
                 Debug.Fail("Should have found {0} in the resource string.");
-                content.Add(InterpolatedStringText(generator, text));
+                content.Add(InterpolatedStringText(generator, escapedText, text));
             }
             else
             {
-                content.Add(InterpolatedStringText(generator, text[..placeholderIndex]));
+                content.Add(InterpolatedStringText(generator, escapedTextParts.pre, textParts.pre));
                 content.Add(generator.Interpolation(nameofExpression));
-                content.Add(InterpolatedStringText(generator, text[(placeholderIndex + Placeholder.Length)..]));
+                content.Add(InterpolatedStringText(generator, escapedTextParts.post, textParts.post));
             }
 
             return generator.ObjectCreationExpression(
@@ -574,9 +594,22 @@ namespace Microsoft.CodeAnalysis.InitializeParameter
                 nameofExpression);
         }
 
-        private static SyntaxNode InterpolatedStringText(SyntaxGenerator generator, string text)
+        private static (string pre, string post) GetPreAndPostTextParts(string text)
         {
-            return generator.InterpolatedStringText(generator.InterpolatedStringTextToken(text));
+            const string Placeholder = "{0}";
+
+            var index = text.IndexOf(Placeholder);
+            if (index < 0)
+            {
+                return (null, null);
+            }
+
+            return (text[..index], text[(index + Placeholder.Length)..]);
+        }
+
+        private static SyntaxNode InterpolatedStringText(SyntaxGenerator generator, string content, string value)
+        {
+            return generator.InterpolatedStringText(generator.InterpolatedStringTextToken(content, value));
         }
     }
 }

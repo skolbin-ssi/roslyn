@@ -34,26 +34,7 @@ StackTrace:
                 }
             }
 
-            public event EventHandler Disposed = (s, e) => { };
-
-            private void Dispose()
-            {
-                if (_disposed)
-                {
-                    Debug.Fail("Tagger already disposed");
-                    return;
-                }
-
-                // Stop computing any initial tags if we've been asked for them.
-                _initialComputationCancellationTokenSource.Cancel();
-                _disposed = true;
-                this.Disposed(this, EventArgs.Empty);
-                GC.SuppressFinalize(this);
-
-                this.Disconnect();
-            }
-
-            internal void OnTaggerAdded(Tagger tagger)
+            internal void OnTaggerAdded(Tagger _)
             {
                 // this should be only called from UI thread. 
                 // in unit test, must be called from same thread as OnTaggerDisposed
@@ -65,7 +46,7 @@ StackTrace:
                 DebugRecordCurrentThread();
             }
 
-            internal void OnTaggerDisposed(Tagger tagger)
+            internal void OnTaggerDisposed(Tagger _)
             {
                 // this should be only called from UI thread.
                 // in unit test, must be called from same thread as OnTaggerAdded
@@ -85,8 +66,8 @@ StackTrace:
                 => Dispose();
 
 #if DEBUG
-            private Thread _thread;
-            private string _stackTrace;
+            private Thread? _thread;
+            private string? _stackTrace;
 
             private void DebugRecordInitialStackTrace()
                 => _stackTrace = new StackTrace().ToString();
@@ -104,15 +85,15 @@ StackTrace:
             private void DebugVerifyThread()
                 => Contract.ThrowIfFalse(Thread.CurrentThread == _thread);
 #else
-            private void DebugRecordInitialStackTrace()
+            private static void DebugRecordInitialStackTrace()
             {
             }
 
-            private void DebugRecordCurrentThread()
+            private static void DebugRecordCurrentThread()
             {
             }
 
-            private void DebugVerifyThread()
+            private static void DebugVerifyThread()
             {
             }
 #endif

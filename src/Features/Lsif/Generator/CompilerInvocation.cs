@@ -8,7 +8,9 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Host;
+using Microsoft.CodeAnalysis.Options;
 using Microsoft.CodeAnalysis.Shared.Extensions;
 using Newtonsoft.Json;
 
@@ -17,14 +19,16 @@ namespace Microsoft.CodeAnalysis.LanguageServerIndexFormat.Generator
     internal class CompilerInvocation
     {
         public Compilation Compilation { get; }
-        public HostLanguageServices LanguageServices { get; internal set; }
-        public string ProjectFilePath { get; internal set; }
+        public HostLanguageServices LanguageServices { get; }
+        public string ProjectFilePath { get; }
+        public OptionSet Options { get; }
 
-        public CompilerInvocation(Compilation compilation, HostLanguageServices languageServices, string projectFilePath)
+        public CompilerInvocation(Compilation compilation, HostLanguageServices languageServices, string projectFilePath, OptionSet options)
         {
             Compilation = compilation;
             LanguageServices = languageServices;
             ProjectFilePath = projectFilePath;
+            Options = options;
         }
 
         public static async Task<CompilerInvocation> CreateFromJsonAsync(string jsonContents)
@@ -45,15 +49,15 @@ namespace Microsoft.CodeAnalysis.LanguageServerIndexFormat.Generator
 
             // Unfortunately for us there are a few paths that get directly read by the command line parse which we need to remap,
             // such as /ruleset files. So let's go through and process them now.
-            for (int i = 0; i < splitCommandLine.Count; i++)
+            for (var i = 0; i < splitCommandLine.Count; i++)
             {
                 const string RuleSetSwitch = "/ruleset:";
 
                 if (splitCommandLine[i].StartsWith(RuleSetSwitch, StringComparison.Ordinal))
                 {
-                    string rulesetPath = splitCommandLine[i].Substring(RuleSetSwitch.Length);
+                    var rulesetPath = splitCommandLine[i].Substring(RuleSetSwitch.Length);
 
-                    bool quoted = rulesetPath.Length > 2 &&
+                    var quoted = rulesetPath.Length > 2 &&
                         rulesetPath.StartsWith("\"", StringComparison.Ordinal) &&
                         rulesetPath.EndsWith("\"", StringComparison.Ordinal);
 
@@ -76,6 +80,8 @@ namespace Microsoft.CodeAnalysis.LanguageServerIndexFormat.Generator
             var commandLineParserService = languageServices.GetRequiredService<ICommandLineParserService>();
             var parsedCommandLine = commandLineParserService.Parse(splitCommandLine, Path.GetDirectoryName(invocationInfo.ProjectFilePath), isInteractive: false, sdkDirectory: null);
 
+            var analyzerLoader = new DefaultAnalyzerAssemblyLoader();
+
             var projectId = ProjectId.CreateNewId(invocationInfo.ProjectFilePath);
 
             var projectInfo = ProjectInfo.Create(
@@ -90,14 +96,15 @@ namespace Microsoft.CodeAnalysis.LanguageServerIndexFormat.Generator
                 parsedCommandLine.ParseOptions,
                 parsedCommandLine.SourceFiles.Select(s => CreateDocumentInfo(unmappedPath: s.Path)),
                 metadataReferences: parsedCommandLine.MetadataReferences.Select(r => MetadataReference.CreateFromFile(mapPath(r.Reference), r.Properties)),
-                additionalDocuments: parsedCommandLine.AdditionalFiles.Select(f => CreateDocumentInfo(unmappedPath: f.Path)))
+                additionalDocuments: parsedCommandLine.AdditionalFiles.Select(f => CreateDocumentInfo(unmappedPath: f.Path)),
+                analyzerReferences: parsedCommandLine.AnalyzerReferences.Select(r => new AnalyzerFileReference(r.FilePath, analyzerLoader)))
                 .WithAnalyzerConfigDocuments(parsedCommandLine.AnalyzerConfigPaths.Select(CreateDocumentInfo));
 
             workspace.AddProject(projectInfo);
 
             var compilation = await workspace.CurrentSolution.GetProject(projectId)!.GetRequiredCompilationAsync(CancellationToken.None);
 
-            return new CompilerInvocation(compilation, languageServices, invocationInfo.ProjectFilePath);
+            return new CompilerInvocation(compilation, languageServices, invocationInfo.ProjectFilePath, workspace.CurrentSolution.Options);
 
             // Local methods:
             DocumentInfo CreateDocumentInfo(string unmappedPath)
@@ -154,7 +161,7 @@ namespace Microsoft.CodeAnalysis.LanguageServerIndexFormat.Generator
                     {
                         // Trim off any leading \, which would happen if you have a path like C:\Directory\\File.cs with a double slash, and happen to be
                         // mapping C:\Directory somewhere.
-                        string relativePath = unmappedPath.Substring(fromWithDirectorySuffix.Length).TrimStart('\\');
+                        var relativePath = unmappedPath.Substring(fromWithDirectorySuffix.Length).TrimStart('\\');
 
                         return Path.Combine(AddDirectorySuffixIfMissing(potentialPathMapping.To), relativePath);
                     }
@@ -190,7 +197,7 @@ namespace Microsoft.CodeAnalysis.LanguageServerIndexFormat.Generator
                 public string To { get; set; }
             }
 
-#nullable restore
+#nullable disable
         }
     }
 }

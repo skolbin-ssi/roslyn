@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+#nullable disable
+
 using System.Collections.Immutable;
 using System.Linq;
 using System.Linq.Expressions;
@@ -34,6 +36,7 @@ namespace Microsoft.CodeAnalysis.CSharp.InlineDeclaration
 
         public CSharpInlineDeclarationDiagnosticAnalyzer()
             : base(IDEDiagnosticIds.InlineDeclarationDiagnosticId,
+                   EnforceOnBuildValues.InlineDeclaration,
                    CSharpCodeStyleOptions.PreferInlinedVariableDeclaration,
                    LanguageNames.CSharp,
                    new LocalizableResourceString(nameof(CSharpAnalyzersResources.Inline_variable_declaration), CSharpAnalyzersResources.ResourceManager, typeof(CSharpAnalyzersResources)),
@@ -237,7 +240,7 @@ namespace Microsoft.CodeAnalysis.CSharp.InlineDeclaration
                 properties: null));
         }
 
-        private bool WouldCauseDefiniteAssignmentErrors(
+        private static bool WouldCauseDefiniteAssignmentErrors(
             SemanticModel semanticModel,
             LocalDeclarationStatementSyntax localStatement,
             BlockSyntax enclosingBlock,
@@ -260,7 +263,7 @@ namespace Microsoft.CodeAnalysis.CSharp.InlineDeclaration
             return dataFlow.DataFlowsIn.Contains(outLocalSymbol);
         }
 
-        private SyntaxNode GetOutArgumentScope(SyntaxNode argumentExpression)
+        private static SyntaxNode GetOutArgumentScope(SyntaxNode argumentExpression)
         {
             for (var current = argumentExpression; current != null; current = current.Parent)
             {
@@ -312,7 +315,7 @@ namespace Microsoft.CodeAnalysis.CSharp.InlineDeclaration
             return null;
         }
 
-        private bool IsAccessed(
+        private static bool IsAccessed(
             SemanticModel semanticModel,
             ISymbol outSymbol,
             BlockSyntax enclosingBlockOfLocalStatement,

@@ -2,11 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-#nullable enable
-
 using System;
 using System.Collections.Immutable;
 using System.Composition;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading;
@@ -22,6 +21,7 @@ using Microsoft.CodeAnalysis.PickMembers;
 using Microsoft.CodeAnalysis.PooledObjects;
 using Microsoft.CodeAnalysis.Shared.Extensions;
 using Microsoft.CodeAnalysis.Text;
+using Roslyn.Utilities;
 
 namespace Microsoft.CodeAnalysis.GenerateEqualsAndGetHashCodeFromMembers
 {
@@ -122,11 +122,11 @@ namespace Microsoft.CodeAnalysis.GenerateEqualsAndGetHashCodeFromMembers
             context.RegisterRefactorings(actions);
         }
 
-        private bool HasOperators(INamedTypeSymbol containingType)
+        private static bool HasOperators(INamedTypeSymbol containingType)
             => HasOperator(containingType, WellKnownMemberNames.EqualityOperatorName) ||
                HasOperator(containingType, WellKnownMemberNames.InequalityOperatorName);
 
-        private bool HasOperator(INamedTypeSymbol containingType, string operatorName)
+        private static bool HasOperator(INamedTypeSymbol containingType, string operatorName)
             => containingType.GetMembers(operatorName)
                              .OfType<IMethodSymbol>()
                              .Any(m => m.MethodKind == MethodKind.UserDefinedOperator &&
@@ -134,7 +134,7 @@ namespace Microsoft.CodeAnalysis.GenerateEqualsAndGetHashCodeFromMembers
                                        containingType.Equals(m.Parameters[0].Type) &&
                                        containingType.Equals(m.Parameters[1].Type));
 
-        private bool CanImplementIEquatable(
+        private static bool CanImplementIEquatable(
             SemanticModel semanticModel, INamedTypeSymbol containingType,
             [NotNullWhen(true)] out INamedTypeSymbol? constructedType)
         {
@@ -157,7 +157,7 @@ namespace Microsoft.CodeAnalysis.GenerateEqualsAndGetHashCodeFromMembers
             return false;
         }
 
-        private void GetExistingMemberInfo(INamedTypeSymbol containingType, out bool hasEquals, out bool hasGetHashCode)
+        private static void GetExistingMemberInfo(INamedTypeSymbol containingType, out bool hasEquals, out bool hasGetHashCode)
         {
             hasEquals = containingType.GetMembers(EqualsName)
                                       .OfType<IMethodSymbol>()
@@ -187,6 +187,7 @@ namespace Microsoft.CodeAnalysis.GenerateEqualsAndGetHashCodeFromMembers
                         var syntaxFacts = document.GetRequiredLanguageService<ISyntaxFactsService>();
                         var root = await document.GetRequiredSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
                         var typeDeclaration = syntaxFacts.GetContainingTypeDeclaration(root, textSpan.Start);
+                        RoslynDebug.AssertNotNull(typeDeclaration);
 
                         return await CreateActionsAsync(
                             document, typeDeclaration, info.ContainingType, info.SelectedMembers,
@@ -283,7 +284,7 @@ namespace Microsoft.CodeAnalysis.GenerateEqualsAndGetHashCodeFromMembers
                 pickMembersOptions.ToImmutable(), generateEquals, generateGetHashCode);
         }
 
-        private async Task<CodeAction> CreateCodeActionWithoutDialogAsync(
+        private static async Task<CodeAction> CreateCodeActionWithoutDialogAsync(
             Document document, SyntaxNode typeDeclaration, INamedTypeSymbol containingType, ImmutableArray<ISymbol> members,
             bool generateEquals, bool generateGetHashCode, CancellationToken cancellationToken)
         {

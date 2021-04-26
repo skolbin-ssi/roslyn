@@ -7,29 +7,26 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis.Host;
 using Microsoft.CodeAnalysis.Text;
+using Microsoft.VisualStudio.Debugger.Contracts.EditAndContinue;
 
 namespace Microsoft.CodeAnalysis.EditAndContinue
 {
-    internal interface IEditAndContinueWorkspaceService : IWorkspaceService
+    internal interface IEditAndContinueWorkspaceService : IWorkspaceService, IActiveStatementSpanProvider
     {
-        Task<ImmutableArray<Diagnostic>> GetDocumentDiagnosticsAsync(Document document, CancellationToken cancellationToken);
-        Task<bool> HasChangesAsync(string sourceFilePath, CancellationToken cancellationToken);
-        Task<(SolutionUpdateStatus Summary, ImmutableArray<Deltas> Deltas)> EmitSolutionUpdateAsync(CancellationToken cancellationToken);
+        ValueTask<ImmutableArray<Diagnostic>> GetDocumentDiagnosticsAsync(Document document, DocumentActiveStatementSpanProvider activeStatementSpanProvider, CancellationToken cancellationToken);
+        ValueTask<bool> HasChangesAsync(Solution solution, SolutionActiveStatementSpanProvider activeStatementSpanProvider, string? sourceFilePath, CancellationToken cancellationToken);
+        ValueTask<EmitSolutionUpdateResults> EmitSolutionUpdateAsync(Solution solution, SolutionActiveStatementSpanProvider activeStatementSpanProvider, CancellationToken cancellationToken);
 
-        void CommitSolutionUpdate();
+        void CommitSolutionUpdate(out ImmutableArray<DocumentId> documentsToReanalyze);
         void DiscardSolutionUpdate();
 
-        bool IsDebuggingSessionInProgress { get; }
-        void OnSourceFileUpdated(DocumentId documentId);
+        void OnSourceFileUpdated(Document document);
 
-        void StartDebuggingSession();
-        void StartEditSession();
-        void EndEditSession();
-        void EndDebuggingSession();
+        ValueTask StartDebuggingSessionAsync(Solution solution, IManagedEditAndContinueDebuggerService debuggerService, bool captureMatchingDocuments, CancellationToken cancellationToken);
+        void BreakStateEntered(out ImmutableArray<DocumentId> documentsToReanalyze);
+        void EndDebuggingSession(out ImmutableArray<DocumentId> documentsToReanalyze);
 
-        Task<bool?> IsActiveStatementInExceptionRegionAsync(ActiveInstructionId instructionId, CancellationToken cancellationToken);
-        Task<LinePositionSpan?> GetCurrentActiveStatementPositionAsync(ActiveInstructionId instructionId, CancellationToken cancellationToken);
-
-        void ReportApplyChangesException(string message);
+        ValueTask<bool?> IsActiveStatementInExceptionRegionAsync(Solution solution, ManagedInstructionId instructionId, CancellationToken cancellationToken);
+        ValueTask<LinePositionSpan?> GetCurrentActiveStatementPositionAsync(Solution solution, SolutionActiveStatementSpanProvider activeStatementSpanProvider, ManagedInstructionId instructionId, CancellationToken cancellationToken);
     }
 }

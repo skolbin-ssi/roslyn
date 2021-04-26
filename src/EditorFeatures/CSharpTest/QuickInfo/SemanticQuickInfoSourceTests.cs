@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+#nullable disable
+
 using System;
 using System.Linq;
 using System.Security;
@@ -23,19 +25,19 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.QuickInfo
 {
     public class SemanticQuickInfoSourceTests : AbstractSemanticQuickInfoSourceTests
     {
-        private async Task TestWithOptionsAsync(CSharpParseOptions options, string markup, params Action<QuickInfoItem>[] expectedResults)
+        private static async Task TestWithOptionsAsync(CSharpParseOptions options, string markup, params Action<QuickInfoItem>[] expectedResults)
         {
             using var workspace = TestWorkspace.CreateCSharp(markup, options);
             await TestWithOptionsAsync(workspace, expectedResults);
         }
 
-        private async Task TestWithOptionsAsync(CSharpCompilationOptions options, string markup, params Action<QuickInfoItem>[] expectedResults)
+        private static async Task TestWithOptionsAsync(CSharpCompilationOptions options, string markup, params Action<QuickInfoItem>[] expectedResults)
         {
             using var workspace = TestWorkspace.CreateCSharp(markup, compilationOptions: options);
             await TestWithOptionsAsync(workspace, expectedResults);
         }
 
-        private async Task TestWithOptionsAsync(TestWorkspace workspace, params Action<QuickInfoItem>[] expectedResults)
+        private static async Task TestWithOptionsAsync(TestWorkspace workspace, params Action<QuickInfoItem>[] expectedResults)
         {
             var testDocument = workspace.DocumentWithCursor;
             var position = testDocument.CursorPosition.GetValueOrDefault();
@@ -61,7 +63,7 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.QuickInfo
             }
         }
 
-        private async Task TestWithOptionsAsync(Document document, QuickInfoService service, int position, Action<QuickInfoItem>[] expectedResults)
+        private static async Task TestWithOptionsAsync(Document document, QuickInfoService service, int position, Action<QuickInfoItem>[] expectedResults)
         {
             var info = await service.GetQuickInfoAsync(document, position, cancellationToken: CancellationToken.None);
 
@@ -80,7 +82,7 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.QuickInfo
             }
         }
 
-        private async Task VerifyWithMscorlib45Async(string markup, Action<QuickInfoItem>[] expectedResults)
+        private static async Task VerifyWithMscorlib45Async(string markup, Action<QuickInfoItem>[] expectedResults)
         {
             var xmlString = string.Format(@"
 <Workspace>
@@ -144,7 +146,7 @@ using System.Linq;
             return TestWithUsingsAsync(markupInMethod, expectedResults);
         }
 
-        private async Task TestWithReferenceAsync(string sourceCode,
+        private static async Task TestWithReferenceAsync(string sourceCode,
             string referencedCode,
             string sourceLanguage,
             string referencedLanguage,
@@ -160,7 +162,7 @@ using System.Linq;
             }
         }
 
-        private async Task TestWithMetadataReferenceHelperAsync(
+        private static async Task TestWithMetadataReferenceHelperAsync(
             string sourceCode,
             string referencedCode,
             string sourceLanguage,
@@ -185,7 +187,7 @@ using System.Linq;
             await VerifyWithReferenceWorkerAsync(xmlString, expectedResults);
         }
 
-        private async Task TestWithProjectReferenceHelperAsync(
+        private static async Task TestWithProjectReferenceHelperAsync(
             string sourceCode,
             string referencedCode,
             string sourceLanguage,
@@ -212,7 +214,7 @@ using System.Linq;
             await VerifyWithReferenceWorkerAsync(xmlString, expectedResults);
         }
 
-        private async Task TestInSameProjectHelperAsync(
+        private static async Task TestInSameProjectHelperAsync(
             string sourceCode,
             string referencedCode,
             string sourceLanguage,
@@ -233,7 +235,7 @@ using System.Linq;
             await VerifyWithReferenceWorkerAsync(xmlString, expectedResults);
         }
 
-        private async Task VerifyWithReferenceWorkerAsync(string xmlString, params Action<QuickInfoItem>[] expectedResults)
+        private static async Task VerifyWithReferenceWorkerAsync(string xmlString, params Action<QuickInfoItem>[] expectedResults)
         {
             using var workspace = TestWorkspace.Create(xmlString);
             var position = workspace.Documents.First(d => d.Name == "SourceDocument").CursorPosition.Value;
@@ -1345,7 +1347,7 @@ class AsyncExample2
         result = await lambda();
     }
 }";
-            await TestAsync(markup, MainDescription($"({CSharpFeaturesResources.awaitable}) {string.Format(FeaturesResources.Awaited_task_returns_0, "class System.Threading.Tasks.Task<TResult>")}"),
+            await TestAsync(markup, MainDescription(string.Format(FeaturesResources.Awaited_task_returns_0, $"({CSharpFeaturesResources.awaitable}) class System.Threading.Tasks.Task<TResult>")),
                          TypeParameterMap($"\r\nTResult {FeaturesResources.is_} int"));
         }
 
@@ -1647,6 +1649,147 @@ class D
         {
             await TestInMethodAsync(@"Consol$$eColor c",
                 MainDescription("enum System.ConsoleColor"));
+        }
+
+        [Fact, Trait(Traits.Feature, Traits.Features.QuickInfo)]
+        [WorkItem(52490, "https://github.com/dotnet/roslyn/issues/52490")]
+        public async Task EnumNonDefaultUnderlyingType_Definition()
+        {
+            await TestInClassAsync(@"enum E$$ : byte { A, B }",
+                MainDescription("enum C.E : byte"));
+        }
+
+        [Fact, Trait(Traits.Feature, Traits.Features.QuickInfo)]
+        [WorkItem(52490, "https://github.com/dotnet/roslyn/issues/52490")]
+        public async Task EnumNonDefaultUnderlyingType_AsField()
+        {
+            await TestInClassAsync(@"
+enum E : byte { A, B }
+
+private E$$ _E;
+",
+                MainDescription("enum C.E : byte"));
+        }
+
+        [Fact, Trait(Traits.Feature, Traits.Features.QuickInfo)]
+        [WorkItem(52490, "https://github.com/dotnet/roslyn/issues/52490")]
+        public async Task EnumNonDefaultUnderlyingType_AsProperty()
+        {
+            await TestInClassAsync(@"
+enum E : byte { A, B }
+
+private E$$ E{ get; set; };
+",
+                MainDescription("enum C.E : byte"));
+        }
+
+        [Fact, Trait(Traits.Feature, Traits.Features.QuickInfo)]
+        [WorkItem(52490, "https://github.com/dotnet/roslyn/issues/52490")]
+        public async Task EnumNonDefaultUnderlyingType_AsParameter()
+        {
+            await TestInClassAsync(@"
+enum E : byte { A, B }
+
+private void M(E$$ e) { }
+",
+                MainDescription("enum C.E : byte"));
+        }
+
+        [Fact, Trait(Traits.Feature, Traits.Features.QuickInfo)]
+        [WorkItem(52490, "https://github.com/dotnet/roslyn/issues/52490")]
+        public async Task EnumNonDefaultUnderlyingType_AsReturnType()
+        {
+            await TestInClassAsync(@"
+enum E : byte { A, B }
+
+private E$$ M() { }
+",
+                MainDescription("enum C.E : byte"));
+        }
+
+        [Fact, Trait(Traits.Feature, Traits.Features.QuickInfo)]
+        [WorkItem(52490, "https://github.com/dotnet/roslyn/issues/52490")]
+        public async Task EnumNonDefaultUnderlyingType_AsLocal()
+        {
+            await TestInClassAsync(@"
+enum E : byte { A, B }
+
+private void M()
+{
+    E$$ e = default;
+}
+",
+                MainDescription("enum C.E : byte"));
+        }
+
+        [Fact, Trait(Traits.Feature, Traits.Features.QuickInfo)]
+        [WorkItem(52490, "https://github.com/dotnet/roslyn/issues/52490")]
+        public async Task EnumNonDefaultUnderlyingType_OnMemberAccessOnType()
+        {
+            await TestInClassAsync(@"
+enum E : byte { A, B }
+
+private void M()
+{
+    var ea = E$$.A;
+}
+",
+                MainDescription("enum C.E : byte"));
+        }
+
+        [Fact, Trait(Traits.Feature, Traits.Features.QuickInfo)]
+        [WorkItem(52490, "https://github.com/dotnet/roslyn/issues/52490")]
+        public async Task EnumNonDefaultUnderlyingType_NotOnMemberAccessOnMember()
+        {
+            await TestInClassAsync(@"
+enum E : byte { A, B }
+
+private void M()
+{
+    var ea = E.A$$;
+}
+",
+                MainDescription("E.A = 0"));
+        }
+
+        [Theory, WorkItem(52490, "https://github.com/dotnet/roslyn/issues/52490")]
+        [InlineData("byte", "byte")]
+        [InlineData("byte", "System.Byte")]
+        [InlineData("sbyte", "sbyte")]
+        [InlineData("sbyte", "System.SByte")]
+        [InlineData("short", "short")]
+        [InlineData("short", "System.Int16")]
+        [InlineData("ushort", "ushort")]
+        [InlineData("ushort", "System.UInt16")]
+        // int is the default type and is not shown
+        [InlineData("uint", "uint")]
+        [InlineData("uint", "System.UInt32")]
+        [InlineData("long", "long")]
+        [InlineData("long", "System.Int64")]
+        [InlineData("ulong", "ulong")]
+        [InlineData("ulong", "System.UInt64")]
+        public async Task EnumNonDefaultUnderlyingType_ShowForNonDefaultTypes(string displayTypeName, string underlyingTypeName)
+        {
+            await TestInClassAsync(@$"
+enum E$$ : {underlyingTypeName}
+{{
+    A, B
+}}",
+                MainDescription($"enum C.E : {displayTypeName}"));
+        }
+
+        [Theory, WorkItem(52490, "https://github.com/dotnet/roslyn/issues/52490")]
+        [InlineData("")]
+        [InlineData(": int")]
+        [InlineData(": System.Int32")]
+        public async Task EnumNonDefaultUnderlyingType_DontShowForDefaultType(string defaultType)
+        {
+            await TestInClassAsync(@$"
+enum E$$ {defaultType}
+{{
+    A, B
+}}",
+                MainDescription("enum C.E"));
         }
 
         [Fact, Trait(Traits.Feature, Traits.Features.QuickInfo)]
@@ -4966,7 +5109,7 @@ class C
         <Document IsLinkFile=""true"" LinkAssemblyName=""Proj1"" LinkFilePath=""SourceDocument""/>
     </Project>
 </Workspace>";
-            var expectedDescription = Usage($"\r\n{string.Format(FeaturesResources._0_1, "Proj1", FeaturesResources.Available)}\r\n{string.Format(FeaturesResources._0_1, "Proj2", FeaturesResources.Not_Available)}\r\n\r\n{FeaturesResources.You_can_use_the_navigation_bar_to_switch_context}", expectsWarningGlyph: true);
+            var expectedDescription = Usage($"\r\n{string.Format(FeaturesResources._0_1, "Proj1", FeaturesResources.Available)}\r\n{string.Format(FeaturesResources._0_1, "Proj2", FeaturesResources.Not_Available)}\r\n\r\n{FeaturesResources.You_can_use_the_navigation_bar_to_switch_contexts}", expectsWarningGlyph: true);
 
             await VerifyWithReferenceWorkerAsync(markup, new[] { expectedDescription });
         }
@@ -4995,7 +5138,7 @@ class C
         <Document IsLinkFile=""true"" LinkAssemblyName=""Proj1"" LinkFilePath=""SourceDocument""/>
     </Project>
 </Workspace>";
-            var expectedDescription = Usage($"\r\n{string.Format(FeaturesResources._0_1, "Proj1", FeaturesResources.Not_Available)}\r\n{string.Format(FeaturesResources._0_1, "Proj2", FeaturesResources.Available)}\r\n\r\n{FeaturesResources.You_can_use_the_navigation_bar_to_switch_context}", expectsWarningGlyph: true);
+            var expectedDescription = Usage($"\r\n{string.Format(FeaturesResources._0_1, "Proj1", FeaturesResources.Not_Available)}\r\n{string.Format(FeaturesResources._0_1, "Proj2", FeaturesResources.Available)}\r\n\r\n{FeaturesResources.You_can_use_the_navigation_bar_to_switch_contexts}", expectsWarningGlyph: true);
 
             await VerifyWithReferenceWorkerAsync(markup, new[] { expectedDescription });
         }
@@ -5027,7 +5170,7 @@ class C
     </Project>
 </Workspace>";
             var expectedDescription = Usage(
-                $"\r\n{string.Format(FeaturesResources._0_1, "Proj1", FeaturesResources.Available)}\r\n{string.Format(FeaturesResources._0_1, "Proj2", FeaturesResources.Not_Available)}\r\n{string.Format(FeaturesResources._0_1, "Proj3", FeaturesResources.Not_Available)}\r\n\r\n{FeaturesResources.You_can_use_the_navigation_bar_to_switch_context}",
+                $"\r\n{string.Format(FeaturesResources._0_1, "Proj1", FeaturesResources.Available)}\r\n{string.Format(FeaturesResources._0_1, "Proj2", FeaturesResources.Not_Available)}\r\n{string.Format(FeaturesResources._0_1, "Proj3", FeaturesResources.Not_Available)}\r\n\r\n{FeaturesResources.You_can_use_the_navigation_bar_to_switch_contexts}",
                 expectsWarningGlyph: true);
 
             await VerifyWithReferenceWorkerAsync(markup, new[] { expectedDescription });
@@ -5062,7 +5205,7 @@ class C
         <Document IsLinkFile=""true"" LinkAssemblyName=""Proj1"" LinkFilePath=""SourceDocument""/>
     </Project>
 </Workspace>";
-            var expectedDescription = Usage($"\r\n{string.Format(FeaturesResources._0_1, "Proj1", FeaturesResources.Available)}\r\n{string.Format(FeaturesResources._0_1, "Proj3", FeaturesResources.Not_Available)}\r\n\r\n{FeaturesResources.You_can_use_the_navigation_bar_to_switch_context}", expectsWarningGlyph: true);
+            var expectedDescription = Usage($"\r\n{string.Format(FeaturesResources._0_1, "Proj1", FeaturesResources.Available)}\r\n{string.Format(FeaturesResources._0_1, "Proj3", FeaturesResources.Not_Available)}\r\n\r\n{FeaturesResources.You_can_use_the_navigation_bar_to_switch_contexts}", expectsWarningGlyph: true);
             await VerifyWithReferenceWorkerAsync(markup, new[] { expectedDescription });
         }
 
@@ -5145,7 +5288,7 @@ class C
     </Project>
 </Workspace>";
 
-            await VerifyWithReferenceWorkerAsync(markup, new[] { MainDescription($"({FeaturesResources.local_variable}) int x"), Usage($"\r\n{string.Format(FeaturesResources._0_1, "Proj1", FeaturesResources.Available)}\r\n{string.Format(FeaturesResources._0_1, "Proj2", FeaturesResources.Not_Available)}\r\n\r\n{FeaturesResources.You_can_use_the_navigation_bar_to_switch_context}", expectsWarningGlyph: true) });
+            await VerifyWithReferenceWorkerAsync(markup, new[] { MainDescription($"({FeaturesResources.local_variable}) int x"), Usage($"\r\n{string.Format(FeaturesResources._0_1, "Proj1", FeaturesResources.Available)}\r\n{string.Format(FeaturesResources._0_1, "Proj2", FeaturesResources.Not_Available)}\r\n\r\n{FeaturesResources.You_can_use_the_navigation_bar_to_switch_contexts}", expectsWarningGlyph: true) });
         }
 
         [WorkItem(1020944, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/1020944")]
@@ -5230,7 +5373,7 @@ class Program
         awa$$it M();
     }
 }";
-            await TestAsync(markup, MainDescription("int[]"));
+            await TestAsync(markup, MainDescription(string.Format(FeaturesResources.Awaited_task_returns_0, "int[]")));
         }
 
         [WorkItem(1114300, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/1114300")]
@@ -5247,7 +5390,7 @@ class Program
         awa$$it M();
     }
 }";
-            await TestAsync(markup, MainDescription("dynamic"));
+            await TestAsync(markup, MainDescription(string.Format(FeaturesResources.Awaited_task_returns_0, "dynamic")));
         }
 
         [Fact, Trait(Traits.Feature, Traits.Features.Completion)]
@@ -6039,8 +6182,8 @@ namespace Nested
         {
             var xmlString = @"
 <Workspace>
-    <Project Language=""C#"" LanguageVersion=""702"" CommonReferences=""true"">
-        <MetadataReferenceFromSource Language=""C#"" LanguageVersion=""702"" CommonReferences=""true"">
+    <Project Language=""C#"" LanguageVersion=""7.2"" CommonReferences=""true"">
+        <MetadataReferenceFromSource Language=""C#"" LanguageVersion=""7.2"" CommonReferences=""true"">
             <Document FilePath=""ReferencedDocument"">
 public ref struct TestRef
 {
@@ -6416,7 +6559,7 @@ class X
     }
 }",
                 MainDescription($"({FeaturesResources.parameter}) string? s"),
-                NullabilityAnalysis(string.Format(CSharpFeaturesResources._0_may_be_null_here, "s")));
+                NullabilityAnalysis(string.Format(FeaturesResources._0_may_be_null_here, "s")));
         }
 
         [Fact, Trait(Traits.Feature, Traits.Features.QuickInfo)]
@@ -6434,7 +6577,7 @@ class X
     }
 }",
                 MainDescription($"({FeaturesResources.parameter}) string? s"),
-                NullabilityAnalysis(string.Format(CSharpFeaturesResources._0_is_not_null_here, "s")));
+                NullabilityAnalysis(string.Format(FeaturesResources._0_is_not_null_here, "s")));
         }
 
         [Fact, Trait(Traits.Feature, Traits.Features.QuickInfo)]
@@ -6453,7 +6596,7 @@ class X
     }
 }",
                 MainDescription($"({FeaturesResources.field}) string? X.s"),
-                NullabilityAnalysis(string.Format(CSharpFeaturesResources._0_may_be_null_here, "s")));
+                NullabilityAnalysis(string.Format(FeaturesResources._0_may_be_null_here, "s")));
         }
 
         [Fact, Trait(Traits.Feature, Traits.Features.QuickInfo)]
@@ -6473,7 +6616,7 @@ class X
     }
 }",
                 MainDescription($"({FeaturesResources.field}) string? X.s"),
-                NullabilityAnalysis(string.Format(CSharpFeaturesResources._0_is_not_null_here, "s")));
+                NullabilityAnalysis(string.Format(FeaturesResources._0_is_not_null_here, "s")));
         }
 
         [Fact, Trait(Traits.Feature, Traits.Features.QuickInfo)]
@@ -6492,7 +6635,7 @@ class X
     }
 }",
                 MainDescription("string? X.S { get; set; }"),
-                NullabilityAnalysis(string.Format(CSharpFeaturesResources._0_may_be_null_here, "S")));
+                NullabilityAnalysis(string.Format(FeaturesResources._0_may_be_null_here, "S")));
         }
 
         [Fact, Trait(Traits.Feature, Traits.Features.QuickInfo)]
@@ -6512,7 +6655,7 @@ class X
     }
 }",
                 MainDescription("string? X.S { get; set; }"),
-                NullabilityAnalysis(string.Format(CSharpFeaturesResources._0_is_not_null_here, "S")));
+                NullabilityAnalysis(string.Format(FeaturesResources._0_is_not_null_here, "S")));
         }
 
         [Fact, Trait(Traits.Feature, Traits.Features.QuickInfo)]
@@ -6536,7 +6679,7 @@ class X
     }
 }",
                 MainDescription($"({FeaturesResources.local_variable}) string? s"),
-                NullabilityAnalysis(string.Format(CSharpFeaturesResources._0_may_be_null_here, "s")));
+                NullabilityAnalysis(string.Format(FeaturesResources._0_may_be_null_here, "s")));
         }
 
         [Fact, Trait(Traits.Feature, Traits.Features.QuickInfo)]
@@ -6560,7 +6703,7 @@ class X
     }
 }",
                 MainDescription($"({FeaturesResources.local_variable}) string? s"),
-                NullabilityAnalysis(string.Format(CSharpFeaturesResources._0_is_not_null_here, "s")));
+                NullabilityAnalysis(string.Format(FeaturesResources._0_is_not_null_here, "s")));
         }
 
         [Fact, Trait(Traits.Feature, Traits.Features.QuickInfo)]
@@ -6580,7 +6723,7 @@ class X
     }
 }",
                 MainDescription($"({FeaturesResources.local_variable}) string? s"),
-                NullabilityAnalysis(string.Format(CSharpFeaturesResources._0_may_be_null_here, "s")));
+                NullabilityAnalysis(string.Format(FeaturesResources._0_may_be_null_here, "s")));
         }
 
         [Fact, Trait(Traits.Feature, Traits.Features.QuickInfo)]
@@ -6600,7 +6743,7 @@ class X
     }
 }",
                 MainDescription($"({FeaturesResources.local_variable}) string? s"),
-                NullabilityAnalysis(string.Format(CSharpFeaturesResources._0_is_not_null_here, "s")));
+                NullabilityAnalysis(string.Format(FeaturesResources._0_is_not_null_here, "s")));
         }
 
         [Fact, Trait(Traits.Feature, Traits.Features.QuickInfo)]
@@ -6658,7 +6801,7 @@ class X
     }
 }",
                 MainDescription($"({FeaturesResources.local_variable}) string s"),
-                NullabilityAnalysis(string.Format(CSharpFeaturesResources._0_is_not_null_here, "s")));
+                NullabilityAnalysis(string.Format(FeaturesResources._0_is_not_null_here, "s")));
         }
 
         [Fact, Trait(Traits.Feature, Traits.Features.QuickInfo)]
@@ -7035,6 +7178,92 @@ class Person
         }
     }
 }");
+        }
+
+        [Fact, Trait(Traits.Feature, Traits.Features.QuickInfo)]
+        public async Task QuickInfoRecord()
+        {
+            await TestWithOptionsAsync(
+                Options.Regular.WithLanguageVersion(LanguageVersion.CSharp9),
+@"record Person(string First, string Last)
+{
+    void M($$Person p)
+    {
+    }
+}", MainDescription("record Person"));
+        }
+
+        [Fact, Trait(Traits.Feature, Traits.Features.QuickInfo)]
+        public async Task QuickInfoDerivedRecord()
+        {
+            await TestWithOptionsAsync(
+                Options.Regular.WithLanguageVersion(LanguageVersion.CSharp9),
+@"record Person(string First, string Last)
+{
+}
+record Student(string Id)
+{
+    void M($$Student p)
+    {
+    }
+}
+", MainDescription("record Student"));
+        }
+
+        [Fact, Trait(Traits.Feature, Traits.Features.QuickInfo)]
+        [WorkItem(44904, "https://github.com/dotnet/roslyn/issues/44904")]
+        public async Task QuickInfoRecord_BaseTypeList()
+        {
+            await TestAsync(@"
+record Person(string First, string Last);
+record Student(int Id) : $$Person(null, null);
+", MainDescription("Person.Person(string First, string Last)"));
+        }
+
+        [Fact, Trait(Traits.Feature, Traits.Features.QuickInfo)]
+        public async Task QuickInfo_BaseConstructorInitializer()
+        {
+            await TestAsync(@"
+public class Person { public Person(int id) { } }
+public class Student : Person { public Student() : $$base(0) { } }
+", MainDescription("Person.Person(int id)"));
+        }
+
+        [Fact, Trait(Traits.Feature, Traits.Features.QuickInfo)]
+        [WorkItem(51615, "https://github.com/dotnet/roslyn/issues/51615")]
+        public async Task TestVarPatternOnVarKeyword()
+        {
+            await TestAsync(
+@"class C
+{
+    string M() { }
+
+    void M2()
+    {
+      if (M() is va$$r x && x.Length > 0)
+      {
+      }
+    }
+}",
+                MainDescription("class System.String"));
+        }
+
+        [Fact, Trait(Traits.Feature, Traits.Features.QuickInfo)]
+        public async Task TestVarPatternOnVariableItself()
+        {
+            await TestAsync(
+@"class C
+{
+    string M() { }
+
+    void M2()
+    {
+      if (M() is var x$$ && x.Length > 0)
+      {
+      }
+    }
+}",
+                MainDescription($"({FeaturesResources.local_variable}) string? x"));
         }
     }
 }

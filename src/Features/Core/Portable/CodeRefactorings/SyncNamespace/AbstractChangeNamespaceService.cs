@@ -2,8 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-#nullable enable
-
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -127,7 +125,7 @@ namespace Microsoft.CodeAnalysis.ChangeNamespace
             }
 
             var semanticModel = await document.GetRequiredSemanticModelAsync(cancellationToken).ConfigureAwait(false);
-            var originalNamespaceName = semanticModel.GetDeclaredSymbol(originalNamespaceDeclarations.First()).ToDisplayString();
+            var originalNamespaceName = semanticModel.GetRequiredDeclaredSymbol(originalNamespaceDeclarations.First(), cancellationToken).ToDisplayString();
             var solution = document.Project.Solution;
 
             // Only loop as many top level namespace declarations as we originally had. 
@@ -135,13 +133,14 @@ namespace Microsoft.CodeAnalysis.ChangeNamespace
             // rule out namespaces that didn't need to be changed
             for (var i = 0; i < originalNamespaceDeclarations.Length; i++)
             {
-                var namespaceName = semanticModel.GetDeclaredSymbol(originalNamespaceDeclarations[i]).ToDisplayString();
+                var namespaceName = semanticModel.GetRequiredDeclaredSymbol(originalNamespaceDeclarations[i], cancellationToken).ToDisplayString();
                 if (namespaceName != originalNamespaceName)
                 {
                     // Skip all namespaces that didn't match the original namespace name that 
                     // we were syncing. 
                     continue;
                 }
+
                 syntaxRoot = await document.GetRequiredSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
 
                 // Since the original namespaces were retrieved before the document was modified
@@ -303,7 +302,7 @@ namespace Microsoft.CodeAnalysis.ChangeNamespace
         /// <summary>
         /// Mark container nodes with our annotation so we can keep track of them across syntax modifications.
         /// </summary>
-        protected async Task<Solution> AnnotateContainersAsync(Solution solution, ImmutableArray<(DocumentId, SyntaxNode)> containers, CancellationToken cancellationToken)
+        protected static async Task<Solution> AnnotateContainersAsync(Solution solution, ImmutableArray<(DocumentId, SyntaxNode)> containers, CancellationToken cancellationToken)
         {
             var solutionEditor = new SolutionEditor(solution);
             foreach (var (id, container) in containers)
@@ -393,7 +392,7 @@ namespace Microsoft.CodeAnalysis.ChangeNamespace
             return builder.ToImmutableAndFree();
         }
 
-        private ImmutableArray<SyntaxNode> CreateImports(Document document, ImmutableArray<string> names, bool withFormatterAnnotation)
+        private static ImmutableArray<SyntaxNode> CreateImports(Document document, ImmutableArray<string> names, bool withFormatterAnnotation)
         {
             var generator = SyntaxGenerator.GetGenerator(document);
             using var builderDisposer = ArrayBuilder<SyntaxNode>.GetInstance(names.Length, out var builder);
@@ -608,13 +607,16 @@ namespace Microsoft.CodeAnalysis.ChangeNamespace
 
             var optionSet = await document.GetOptionsAsync(cancellationToken).ConfigureAwait(false);
             var placeSystemNamespaceFirst = optionSet.GetOption(GenerationOptions.PlaceSystemNamespaceFirst, document.Project.Language);
+            var allowInHiddenRegions = document.CanAddImportsInHiddenRegions();
+
             var documentWithAddedImports = await AddImportsInContainersAsync(
-                    document,
-                    addImportService,
-                    containersToAddImports,
-                    namesToImport,
-                    placeSystemNamespaceFirst,
-                    cancellationToken).ConfigureAwait(false);
+                document,
+                addImportService,
+                containersToAddImports,
+                namesToImport,
+                placeSystemNamespaceFirst,
+                allowInHiddenRegions,
+                cancellationToken).ConfigureAwait(false);
 
             var root = await documentWithAddedImports.GetRequiredSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
 
@@ -629,7 +631,7 @@ namespace Microsoft.CodeAnalysis.ChangeNamespace
             return await Simplifier.ReduceAsync(formattedDocument, optionSet, cancellationToken).ConfigureAwait(false);
         }
 
-        private async Task<Document> FixReferencingDocumentAsync(
+        private static async Task<Document> FixReferencingDocumentAsync(
             Document document,
             IEnumerable<LocationForAffectedSymbol> refLocations,
             string newNamespace,
@@ -650,6 +652,7 @@ namespace Microsoft.CodeAnalysis.ChangeNamespace
 
             var optionSet = await documentWithRefFixed.GetOptionsAsync(cancellationToken).ConfigureAwait(false);
             var placeSystemNamespaceFirst = optionSet.GetOption(GenerationOptions.PlaceSystemNamespaceFirst, documentWithRefFixed.Project.Language);
+            var allowInHiddenRegions = document.CanAddImportsInHiddenRegions();
 
             var documentWithAdditionalImports = await AddImportsInContainersAsync(
                 documentWithRefFixed,
@@ -657,6 +660,7 @@ namespace Microsoft.CodeAnalysis.ChangeNamespace
                 containers,
                 ImmutableArray.Create(newNamespace),
                 placeSystemNamespaceFirst,
+                allowInHiddenRegions,
                 cancellationToken).ConfigureAwait(false);
 
             // Need to invoke formatter explicitly since we are doing the diff merge ourselves.
@@ -674,7 +678,7 @@ namespace Microsoft.CodeAnalysis.ChangeNamespace
         ///     2. find and mark the qualified reference for simplification.
         /// Otherwise, there would be no namespace replacement.
         /// </summary>
-        private async Task<(Document, ImmutableArray<SyntaxNode>)> FixReferencesAsync(
+        private static async Task<(Document, ImmutableArray<SyntaxNode>)> FixReferencesAsync(
             Document document,
             IChangeNamespaceService changeNamespaceService,
             IAddImportsService addImportService,
@@ -740,12 +744,13 @@ namespace Microsoft.CodeAnalysis.ChangeNamespace
 
             var fixedDocument = editor.GetChangedDocument();
             root = await fixedDocument.GetRequiredSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
-            var result = (fixedDocument, containers.SelectAsArray(c => root.GetCurrentNode(c)));
+            var result = (fixedDocument, containers.SelectAsArray(c => root.GetCurrentNode(c)
+                ?? throw new InvalidOperationException("Can't get SyntaxNode from GetCurrentNode.")));
 
             return result;
         }
 
-        private async Task<Solution> RemoveUnnecessaryImportsAsync(
+        private static async Task<Solution> RemoveUnnecessaryImportsAsync(
             Solution solution,
             ImmutableArray<DocumentId> ids,
             ImmutableArray<string> names,
@@ -801,12 +806,13 @@ namespace Microsoft.CodeAnalysis.ChangeNamespace
         /// Add imports for the namespace specified by <paramref name="names"/>
         /// to the provided <paramref name="containers"/>
         /// </summary>
-        private async Task<Document> AddImportsInContainersAsync(
+        private static async Task<Document> AddImportsInContainersAsync(
             Document document,
             IAddImportsService addImportService,
             ImmutableArray<SyntaxNode> containers,
             ImmutableArray<string> names,
             bool placeSystemNamespaceFirst,
+            bool allowInHiddenRegions,
             CancellationToken cancellationToken)
         {
             // Sort containers based on their span start, to make the result of 
@@ -829,7 +835,7 @@ namespace Microsoft.CodeAnalysis.ChangeNamespace
                 var compilation = await document.Project.GetRequiredCompilationAsync(cancellationToken).ConfigureAwait(false);
                 var root = await document.GetRequiredSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
                 var generator = document.GetRequiredLanguageService<SyntaxGenerator>();
-                root = addImportService.AddImports(compilation, root, contextLocation, imports, generator, placeSystemNamespaceFirst, cancellationToken);
+                root = addImportService.AddImports(compilation, root, contextLocation, imports, generator, placeSystemNamespaceFirst, allowInHiddenRegions, cancellationToken);
                 document = document.WithSyntaxRoot(root);
             }
 
@@ -838,7 +844,7 @@ namespace Microsoft.CodeAnalysis.ChangeNamespace
 
         private static async Task<Solution> MergeDiffAsync(Solution oldSolution, Solution newSolution, CancellationToken cancellationToken)
         {
-            var diffMergingSession = new LinkedFileDiffMergingSession(oldSolution, newSolution, newSolution.GetChanges(oldSolution), logSessionInfo: false);
+            var diffMergingSession = new LinkedFileDiffMergingSession(oldSolution, newSolution, newSolution.GetChanges(oldSolution));
             var mergeResult = await diffMergingSession.MergeDiffsAsync(mergeConflictHandler: null, cancellationToken: cancellationToken).ConfigureAwait(false);
             return mergeResult.MergedSolution;
         }

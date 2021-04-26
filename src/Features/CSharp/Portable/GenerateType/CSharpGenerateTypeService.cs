@@ -2,29 +2,29 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Composition;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis.CodeGeneration;
-using Microsoft.CodeAnalysis.Editing;
 using Microsoft.CodeAnalysis.CSharp.Extensions;
 using Microsoft.CodeAnalysis.CSharp.Extensions.ContextQuery;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.CSharp.Utilities;
+using Microsoft.CodeAnalysis.Editing;
 using Microsoft.CodeAnalysis.Formatting;
-using Microsoft.CodeAnalysis.GenerateMember.GenerateConstructor;
 using Microsoft.CodeAnalysis.GenerateType;
 using Microsoft.CodeAnalysis.Host.Mef;
 using Microsoft.CodeAnalysis.LanguageServices;
 using Microsoft.CodeAnalysis.Shared.Extensions;
 using Microsoft.CodeAnalysis.Text;
-using Roslyn.Utilities;
 using Microsoft.CodeAnalysis.Utilities;
-using System.Collections.Immutable;
+using Roslyn.Utilities;
 
 namespace Microsoft.CodeAnalysis.CSharp.GenerateType
 {
@@ -32,8 +32,6 @@ namespace Microsoft.CodeAnalysis.CSharp.GenerateType
     internal class CSharpGenerateTypeService :
         AbstractGenerateTypeService<CSharpGenerateTypeService, SimpleNameSyntax, ObjectCreationExpressionSyntax, ExpressionSyntax, TypeDeclarationSyntax, ArgumentSyntax>
     {
-        private static readonly SyntaxAnnotation s_annotation = new SyntaxAnnotation();
-
         [ImportingConstructor]
         [Obsolete(MefConstruction.ImportingConstructorMessage, error: true)]
         public CSharpGenerateTypeService()
@@ -444,7 +442,7 @@ namespace Microsoft.CodeAnalysis.CSharp.GenerateType
             return true;
         }
 
-        private IMethodSymbol GetMethodSymbolIfPresent(SemanticModel semanticModel, ExpressionSyntax expression, CancellationToken cancellationToken)
+        private static IMethodSymbol GetMethodSymbolIfPresent(SemanticModel semanticModel, ExpressionSyntax expression, CancellationToken cancellationToken)
         {
             if (expression == null)
             {
@@ -472,7 +470,7 @@ namespace Microsoft.CodeAnalysis.CSharp.GenerateType
             return null;
         }
 
-        private Accessibility DetermineAccessibilityConstraint(
+        private static Accessibility DetermineAccessibilityConstraint(
             State state,
             SemanticModel semanticModel,
             CancellationToken cancellationToken)
@@ -481,7 +479,7 @@ namespace Microsoft.CodeAnalysis.CSharp.GenerateType
                 state.NameOrMemberAccessExpression as TypeSyntax, cancellationToken);
         }
 
-        private bool AllContainingTypesArePublicOrProtected(
+        private static bool AllContainingTypesArePublicOrProtected(
             State state,
             SemanticModel semanticModel,
             CancellationToken cancellationToken)
@@ -633,7 +631,7 @@ namespace Microsoft.CodeAnalysis.CSharp.GenerateType
             return FindNamespaceInMemberDeclarations(namespaceDecl.Members, indexDone, containers);
         }
 
-        private bool IdentifierMatches(int indexDone, List<string> namespaceContainers, List<string> containers)
+        private static bool IdentifierMatches(int indexDone, List<string> namespaceContainers, List<string> containers)
         {
             for (var i = 0; i < namespaceContainers.Count; ++i)
             {
@@ -755,7 +753,7 @@ namespace Microsoft.CodeAnalysis.CSharp.GenerateType
             return false;
         }
 
-        private bool IsAllContainingTypeDeclsPublic(SyntaxNode node)
+        private static bool IsAllContainingTypeDeclsPublic(SyntaxNode node)
         {
             // Make sure that all the containing Type Declarations are also Public
             var containingTypeDeclarations = node.GetAncestors<TypeDeclarationSyntax>();
@@ -820,7 +818,7 @@ namespace Microsoft.CodeAnalysis.CSharp.GenerateType
             return updatedSolution;
         }
 
-        private ITypeSymbol GetPropertyType(
+        private static ITypeSymbol GetPropertyType(
             SimpleNameSyntax propertyName,
             SemanticModel semanticModel,
             ITypeInferenceService typeInference,
@@ -841,7 +839,7 @@ namespace Microsoft.CodeAnalysis.CSharp.GenerateType
             return null;
         }
 
-        private IPropertySymbol CreatePropertySymbol(
+        private static IPropertySymbol CreatePropertySymbol(
             SimpleNameSyntax propertyName, ITypeSymbol propertyType)
         {
             return CodeGenerationSymbolFactory.CreatePropertySymbol(
@@ -879,40 +877,6 @@ namespace Microsoft.CodeAnalysis.CSharp.GenerateType
 
             property = CreatePropertySymbol(propertyName, propertyType);
             return property != null;
-        }
-
-        internal override IMethodSymbol GetDelegatingConstructor(
-            SemanticDocument document,
-            ObjectCreationExpressionSyntax objectCreation,
-            INamedTypeSymbol namedType,
-            ISet<IMethodSymbol> candidates,
-            CancellationToken cancellationToken)
-        {
-            var model = document.SemanticModel;
-
-            var oldNode = objectCreation
-                    .AncestorsAndSelf(ascendOutOfTrivia: false)
-                    .Where(node => SpeculationAnalyzer.CanSpeculateOnNode(node))
-                    .LastOrDefault();
-
-            var typeNameToReplace = objectCreation.Type;
-            var newTypeName = namedType.GenerateTypeSyntax();
-            var newObjectCreation = objectCreation.WithType(newTypeName).WithAdditionalAnnotations(s_annotation);
-            var newNode = oldNode.ReplaceNode(objectCreation, newObjectCreation);
-
-            var speculativeModel = SpeculationAnalyzer.CreateSpeculativeSemanticModelForNode(oldNode, newNode, model);
-            if (speculativeModel != null)
-            {
-                newObjectCreation = (ObjectCreationExpressionSyntax)newNode.GetAnnotatedNodes(s_annotation).Single();
-                var symbolInfo = speculativeModel.GetSymbolInfo(newObjectCreation, cancellationToken);
-                var parameterTypes = newObjectCreation.ArgumentList.Arguments.Select(
-                    a => a.DetermineParameterType(speculativeModel, cancellationToken)).ToList();
-
-                return GenerateConstructorHelpers.GetDelegatingConstructor(
-                    document, symbolInfo, candidates, namedType, parameterTypes);
-            }
-
-            return null;
         }
     }
 }
