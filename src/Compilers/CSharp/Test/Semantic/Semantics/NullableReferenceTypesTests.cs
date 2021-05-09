@@ -1949,9 +1949,9 @@ class C
                 // (8,9): error CS1656: Cannot assign to 'E' because it is a 'method group'
                 //         a.E! += a.E!; // 1
                 Diagnostic(ErrorCode.ERR_AssgReadonlyLocalCause, "a.E").WithArguments("E", "method group").WithLocation(8, 9),
-                // (9,13): error CS0019: Operator '!=' cannot be applied to operands of type 'method group' and '<null>'
+                // (9,13): error CS8652: The feature 'inferred delegate type' is currently in Preview and *unsupported*. To use Preview features, use the 'preview' language version.
                 //         if (a.E! != null) // 2
-                Diagnostic(ErrorCode.ERR_BadBinaryOps, "a.E! != null").WithArguments("!=", "method group", "<null>").WithLocation(9, 13),
+                Diagnostic(ErrorCode.ERR_FeatureInPreview, "a.E").WithArguments("inferred delegate type").WithLocation(9, 13),
                 // (11,15): error CS1503: Argument 1: cannot convert from 'method group' to 'A'
                 //             M(a.E!); // 3
                 Diagnostic(ErrorCode.ERR_BadArgType, "a.E").WithArguments("1", "method group", "A").WithLocation(11, 15),
@@ -1970,9 +1970,9 @@ class C
                 // (17,9): error CS1656: Cannot assign to 'F' because it is a 'method group'
                 //         a.F! += a.F!; // 8
                 Diagnostic(ErrorCode.ERR_AssgReadonlyLocalCause, "a.F").WithArguments("F", "method group").WithLocation(17, 9),
-                // (18,13): error CS0019: Operator '!=' cannot be applied to operands of type 'method group' and '<null>'
+                // (18,13): error CS8652: The feature 'inferred delegate type' is currently in Preview and *unsupported*. To use Preview features, use the 'preview' language version.
                 //         if (a.F! != null) // 9
-                Diagnostic(ErrorCode.ERR_BadBinaryOps, "a.F! != null").WithArguments("!=", "method group", "<null>").WithLocation(18, 13),
+                Diagnostic(ErrorCode.ERR_FeatureInPreview, "a.F").WithArguments("inferred delegate type").WithLocation(18, 13),
                 // (20,15): error CS1503: Argument 1: cannot convert from 'method group' to 'A'
                 //             M(a.F!); // 10
                 Diagnostic(ErrorCode.ERR_BadArgType, "a.F").WithArguments("1", "method group", "A").WithLocation(20, 15),
@@ -56027,7 +56027,7 @@ class Program
             comp.VerifyDiagnostics();
         }
 
-        [Fact]
+        [ConditionalFact(typeof(IsRelease))]
         [WorkItem(48174, "https://github.com/dotnet/roslyn/issues/48174")]
         public void Lambda_Nesting_Large_01()
         {
@@ -56108,7 +56108,7 @@ class C
             );
         }
 
-        [Fact]
+        [ConditionalFact(typeof(IsRelease))]
         [WorkItem(48174, "https://github.com/dotnet/roslyn/issues/48174")]
         public void Lambda_Nesting_Large_02()
         {
@@ -56137,7 +56137,7 @@ class C
             comp.VerifyDiagnostics();
         }
 
-        [Fact]
+        [ConditionalFact(typeof(IsRelease))]
         [WorkItem(48174, "https://github.com/dotnet/roslyn/issues/48174")]
         public void Lambda_Nesting_Large_03()
         {
@@ -56284,7 +56284,7 @@ namespace nullable_repro
             comp.VerifyDiagnostics();
         }
 
-        [Fact]
+        [ConditionalFact(typeof(IsRelease))]
         [WorkItem(48174, "https://github.com/dotnet/roslyn/issues/48174")]
         public void Lambda_Nesting_ErrorType()
         {
