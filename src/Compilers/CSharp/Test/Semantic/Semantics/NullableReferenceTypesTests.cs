@@ -5112,9 +5112,10 @@ class C
             var declaration = syntaxTree.GetRoot().DescendantNodes().OfType<VariableDeclaratorSyntax>().Single();
             var model = comp.GetSemanticModel(syntaxTree);
             var local = (ILocalSymbol)model.GetDeclaredSymbol(declaration);
-            Assert.Equal(CodeAnalysis.NullableAnnotation.NotAnnotated, local.NullableAnnotation);
-            Assert.Equal(CodeAnalysis.NullableAnnotation.NotAnnotated, local.Type.NullableAnnotation);
-            Assert.Equal("T", local.Type.ToTestDisplayString(includeNonNullable: true));
+            Assert.Equal("T? t2", local.ToTestDisplayString());
+            Assert.Equal(CodeAnalysis.NullableAnnotation.Annotated, local.NullableAnnotation);
+            Assert.Equal(CodeAnalysis.NullableAnnotation.Annotated, local.Type.NullableAnnotation);
+            Assert.Equal("T?", local.Type.ToTestDisplayString(includeNonNullable: true));
         }
 
         [Fact]
@@ -16312,9 +16313,21 @@ partial class A
 ";
             var comp = CreateCompilation(src, options: WithNullableEnable());
             comp.VerifyDiagnostics(
+                // (13,18): warning CS8826: Partial method declarations 'void A.M(object o)' and 'void A.M(object? o)' have signature differences.
+                //     partial void M(object? o) { }
+                Diagnostic(ErrorCode.WRN_PartialMethodTypeDifference, "M").WithArguments("void A.M(object o)", "void A.M(object? o)").WithLocation(13, 18),
+                // (14,18): warning CS8826: Partial method declarations 'void A.M2((object, object) t)' and 'void A.M2((object?, object?) t)' have signature differences.
+                //     partial void M2((object?, object?) t) { }
+                Diagnostic(ErrorCode.WRN_PartialMethodTypeDifference, "M2").WithArguments("void A.M2((object, object) t)", "void A.M2((object?, object?) t)").WithLocation(14, 18),
+                // (15,18): warning CS8826: Partial method declarations 'void A.M3(I<object> i)' and 'void A.M3(I<object?> i)' have signature differences.
+                //     partial void M3(I<object?> i) { }
+                Diagnostic(ErrorCode.WRN_PartialMethodTypeDifference, "M3").WithArguments("void A.M3(I<object> i)", "void A.M3(I<object?> i)").WithLocation(15, 18),
                 // (16,18): warning CS8611: Nullability of reference types in type of parameter 'o' doesn't match partial method declaration.
                 //     partial void M4(ref object? o) { } // warn
-                Diagnostic(ErrorCode.WRN_NullabilityMismatchInParameterTypeOnPartial, "M4").WithArguments("o").WithLocation(16, 18)
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInParameterTypeOnPartial, "M4").WithArguments("o").WithLocation(16, 18),
+                // (17,18): warning CS8826: Partial method declarations 'void A.M6(in object o)' and 'void A.M6(in object? o)' have signature differences.
+                //     partial void M6(in object? o) { }
+                Diagnostic(ErrorCode.WRN_PartialMethodTypeDifference, "M6").WithArguments("void A.M6(in object o)", "void A.M6(in object? o)").WithLocation(17, 18)
                 );
         }
 
@@ -28901,7 +28914,7 @@ public class C
     {
         if (c.field?.field.IsKind() == true)
         {
-            c.field.field.ToString(); // 1
+            c.field.field.ToString();
         }
     }
 
@@ -28909,7 +28922,7 @@ public class C
     {
         if (true == c.field?.field.IsKind())
         {
-            c.field.field.ToString(); // 2
+            c.field.field.ToString();
         }
     }
 
@@ -28932,16 +28945,7 @@ public static class Extension
 }
 ", NotNullWhenAttributeDefinition });
 
-            // Note: when we're done analyzing `c.field?.field.IsKind()` we have an unconditional state.
-            // If we wanted to analyze this properly, we would probably need a WhenTrue/WhenFalse/WhenNull split.
-            c.VerifyDiagnostics(
-                // (12,13): warning CS8602: Dereference of a possibly null reference.
-                //             c.field.field.ToString(); // 1
-                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "c.field.field").WithLocation(12, 13),
-                // (20,13): warning CS8602: Dereference of a possibly null reference.
-                //             c.field.field.ToString(); // 2
-                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "c.field.field").WithLocation(20, 13)
-                );
+            c.VerifyDiagnostics();
         }
 
         [Fact]
@@ -46832,6 +46836,4417 @@ class CL1
                 Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x1").WithLocation(11, 15));
         }
 
+        /// <remarks>Ported from <see cref="FlowTests.IfConditionalConstant" />.</remarks>
+        [Theory]
+        [InlineData("true", "false")]
+        [InlineData("FIELD_TRUE", "FIELD_FALSE")]
+        [InlineData("LOCAL_TRUE", "LOCAL_FALSE")]
+        [InlineData("true || false", "true && false")]
+        [InlineData("!false", "!true")]
+        public void ConditionalConstant_01(string @true, string @false)
+        {
+            var source = @"
+#pragma warning disable 219 // The variable is assigned but its value is never used
+
+class C
+{
+    const bool FIELD_TRUE = true;
+    const bool FIELD_FALSE = false;
+
+    static void M(bool b, object? x)
+    {
+        const bool LOCAL_TRUE = true;
+        const bool LOCAL_FALSE = false;
+
+        x = null;
+        _ = (b ? x != null : " + @false + @")  // `b && x != null`
+            ? x.ToString()
+            : x.ToString(); // 1
+
+        x = new object();
+        _ = (b ? x != null : " + @false + @")  // `b && x != null`
+            ? x.ToString()
+            : x.ToString(); // 2
+
+
+        x = null;
+        _ = (b ? x != null : " + @true + @")  // `!b || x != null`
+            ? x.ToString() // 3
+            : x.ToString(); // 4
+
+        x = new object();
+        _ = (b ? x != null : " + @true + @")  // `!b || x != null`
+            ? x.ToString()
+            : x.ToString(); // 5
+
+
+        x = null;
+        _ = (b ? " + @false + @" : x != null)  // `!b && x != null`
+            ? x.ToString()
+            : x.ToString(); // 6
+
+        x = new object();
+        _ = (b ? " + @false + @" : x != null)  // `!b && x != null`
+            ? x.ToString()
+            : x.ToString(); // 7
+
+
+        x = null;
+        _ = (b ? " + @true + @" : x != null)  // `b || x != null`
+            ? x.ToString() // 8
+            : x.ToString(); // 9
+
+        x = new object();
+        _ = (b ? " + @true + @" : x != null)  // `b || x != null`
+            ? x.ToString()
+            : x.ToString(); // 10
+
+
+        x = null;
+        _ = !(b ? " + @true + @" : x != null)  // `!(b || x != null)` -> `!b && x == null`
+            ? x.ToString() // 11
+            : x.ToString(); // 12
+
+        x = new object();
+        _ = !(b ? " + @true + @" : x != null)  // `!(b || x != null)` -> `!b && x == null`
+            ? x.ToString() // 13
+            : x.ToString();
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (17,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(17, 15),
+                // (22,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(22, 15),
+                // (27,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(27, 15),
+                // (28,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(28, 15),
+                // (33,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 5
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(33, 15),
+                // (39,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 6
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(39, 15),
+                // (44,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 7
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(44, 15),
+                // (49,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 8
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(49, 15),
+                // (50,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 9
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(50, 15),
+                // (55,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 10
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(55, 15),
+                // (60,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 11
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(60, 15),
+                // (61,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 12
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(61, 15),
+                // (65,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 13
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(65, 15)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.IfConditionalConstant" />.</remarks>
+        [Theory]
+        [InlineData("true", "false")]
+        [InlineData("FIELD_TRUE", "FIELD_FALSE")]
+        [InlineData("LOCAL_TRUE", "LOCAL_FALSE")]
+        [InlineData("true || false", "true && false")]
+        [InlineData("!false", "!true")]
+        public void ConditionalConstant_02(string @true, string @false)
+        {
+            var source = @"
+#pragma warning disable 219 // The variable is assigned but its value is never used
+
+class C
+{
+    const bool FIELD_TRUE = true;
+    const bool FIELD_FALSE = false;
+
+    static void M(bool b, object? x)
+    {
+        const bool LOCAL_TRUE = true;
+        const bool LOCAL_FALSE = false;
+
+        x = null;
+        _ = (b ? x == null : " + @false + @")  // `b && x == null`
+            ? x.ToString() // 1
+            : x.ToString(); // 2
+
+        x = new object();
+        _ = (b ? x == null : " + @false + @")  // `b && x == null`
+            ? x.ToString() // 3
+            : x.ToString();
+
+
+        x = null;
+        _ = (b ? x == null : " + @true + @")  // `!b || x == null`
+            ? x.ToString() // 4
+            : x.ToString();
+
+        x = new object();
+        _ = (b ? x == null : " + @true + @")  // `!b || x == null`
+            ? x.ToString() // 5
+            : x.ToString();
+
+
+        x = null;
+        _ = (b ? " + @false + @" : x == null)  // `!b && x == null`
+            ? x.ToString() // 6
+            : x.ToString(); // 7
+
+        x = new object();
+        _ = (b ? " + @false + @" : x == null)  // `!b && x == null`
+            ? x.ToString() // 8
+            : x.ToString();
+
+
+        x = null;
+        _ = !(b ? " + @false + @" : x == null)  // `!(!b && x == null)` -> `b || x != null`
+            ? x.ToString() // 9
+            : x.ToString(); // 10
+
+        x = new object();
+        _ = !(b ? " + @false + @" : x == null)  // `!(!b && x == null)` -> `b || x != null`
+            ? x.ToString()
+            : x.ToString(); // 11
+
+
+        x = null;
+        _ = (b ? " + @true + @" : x == null)  // `b || x == null`
+            ? x.ToString() // 12
+            : x.ToString();
+
+        x = new object();
+        _ = (b ? " + @true + @" : x == null)  // `b || x == null`
+            ? x.ToString() // 13
+            : x.ToString();
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (16,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(16, 15),
+                // (17,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(17, 15),
+                // (21,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(21, 15),
+                // (27,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(27, 15),
+                // (32,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 5
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(32, 15),
+                // (38,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 6
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(38, 15),
+                // (39,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 7
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(39, 15),
+                // (43,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 8
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(43, 15),
+                // (49,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 9
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(49, 15),
+                // (50,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 10
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(50, 15),
+                // (55,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 11
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(55, 15),
+                // (60,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 12
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(60, 15),
+                // (65,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 13
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(65, 15)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.IfConditional_ComplexCondition_ConstantConsequence" /></remarks>
+        [Fact]
+        public void IfConditional_ComplexCondition_ConstantConsequence()
+        {
+            var source = @"
+class C
+{
+    bool M0(int x) => true;
+
+    void M1(object? x)
+    {
+        _ = (x != null ? true : false)
+            ? x.ToString()
+            : x.ToString(); // 1
+    }
+
+    void M2(object? x)
+    {
+        _ = (x != null ? false : true)
+            ? x.ToString() // 2
+            : x.ToString();
+    }
+
+    void M3(object? x)
+    {
+        _ = (x == null ? true : false)
+            ? x.ToString() // 3
+            : x.ToString();
+    }
+
+    void M4(object? x)
+    {
+        _ = (x == null ? false : true)
+            ? x.ToString()
+            : x.ToString(); // 4
+    }
+
+    void M5(object? x)
+    {
+        _ = (!(x == null ? false : true))
+            ? x.ToString() // 5
+            : x.ToString();
+    }
+}
+";
+            var comp = CreateNullableCompilation(source);
+            comp.VerifyDiagnostics(
+                // (10,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(10, 15),
+                // (16,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(16, 15),
+                // (23,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(23, 15),
+                // (31,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(31, 15),
+                // (37,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 5
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(37, 15)
+                );
+        }
+
+        [Theory]
+        [InlineData("[NotNullWhen(true)] out object? obj")]
+        [InlineData("[MaybeNullWhen(false)] out object obj")]
+        public void EqualsCondAccess_NotNullWhenTrue_RightBoolConstant(string param)
+        {
+            var source = @"
+using System.Diagnostics.CodeAnalysis;
+
+class C
+{
+    bool M0(" + param + @") { obj = new object(); return true; }
+
+    static void M1(C? c)
+    {
+        _ = c?.M0(out var obj) == true
+            ? obj.ToString()
+            : obj.ToString(); // 1, 2
+    }
+
+    static void M2(C? c)
+    {
+        _ = c?.M0(out var obj) == false
+            ? obj.ToString() // 3
+            : obj.ToString(); // 4, 5
+    }
+
+    static void M3(C? c)
+    {
+        _ = c?.M0(out var obj) != true
+            ? obj.ToString() // 6, 7
+            : obj.ToString(); // 8
+    }
+
+    static void M4(C? c)
+    {
+        _ = c?.M0(out var obj) != false
+            ? obj.ToString() // 9, 10
+            : obj.ToString(); // 11
+    }
+}
+";
+            var comp = CreateNullableCompilation(new[] { source, NotNullWhenAttributeDefinition, MaybeNullWhenAttributeDefinition });
+            comp.VerifyDiagnostics(
+                // (12,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 1, 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(12, 15),
+                // (12,15): error CS0165: Use of unassigned local variable 'obj'
+                //             : obj.ToString(); // 1, 2
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj").WithArguments("obj").WithLocation(12, 15),
+                // (18,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(18, 15),
+                // (19,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 4, 5
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(19, 15),
+                // (19,15): error CS0165: Use of unassigned local variable 'obj'
+                //             : obj.ToString(); // 4, 5
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj").WithArguments("obj").WithLocation(19, 15),
+                // (25,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 6, 7
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(25, 15),
+                // (25,15): error CS0165: Use of unassigned local variable 'obj'
+                //             ? obj.ToString() // 6, 7
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj").WithArguments("obj").WithLocation(25, 15),
+                // (26,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 8
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(26, 15),
+                // (32,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 9, 10
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(32, 15),
+                // (32,15): error CS0165: Use of unassigned local variable 'obj'
+                //             ? obj.ToString() // 9, 10
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj").WithArguments("obj").WithLocation(32, 15),
+                // (33,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 11
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(33, 15)
+                );
+        }
+
+        [Theory]
+        [InlineData("[NotNullWhen(true)] out object? obj")]
+        [InlineData("[MaybeNullWhen(false)] out object obj")]
+        public void EqualsCondAccess_NotNullWhenTrue_LeftBoolConstant(string param)
+        {
+            var source = @"
+using System.Diagnostics.CodeAnalysis;
+
+class C
+{
+    bool M0(" + param + @") { obj = new object(); return true; }
+
+    static void M1(C? c)
+    {
+        _ = true == c?.M0(out var obj)
+            ? obj.ToString()
+            : obj.ToString(); // 1, 2
+    }
+
+    static void M2(C? c)
+    {
+        _ = false == c?.M0(out var obj)
+            ? obj.ToString() // 3
+            : obj.ToString(); // 4, 5
+    }
+
+    static void M3(C? c)
+    {
+        _ = true != c?.M0(out var obj)
+            ? obj.ToString() // 6, 7
+            : obj.ToString(); // 8
+    }
+
+    static void M4(C? c)
+    {
+        _ = false != c?.M0(out var obj)
+            ? obj.ToString() // 9, 10
+            : obj.ToString(); // 11
+    }
+}
+";
+            var comp = CreateNullableCompilation(new[] { source, NotNullWhenAttributeDefinition, MaybeNullWhenAttributeDefinition });
+            comp.VerifyDiagnostics(
+                // (12,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 1, 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(12, 15),
+                // (12,15): error CS0165: Use of unassigned local variable 'obj'
+                //             : obj.ToString(); // 1, 2
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj").WithArguments("obj").WithLocation(12, 15),
+                // (18,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(18, 15),
+                // (19,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 4, 5
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(19, 15),
+                // (19,15): error CS0165: Use of unassigned local variable 'obj'
+                //             : obj.ToString(); // 4, 5
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj").WithArguments("obj").WithLocation(19, 15),
+                // (25,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 6, 7
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(25, 15),
+                // (25,15): error CS0165: Use of unassigned local variable 'obj'
+                //             ? obj.ToString() // 6, 7
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj").WithArguments("obj").WithLocation(25, 15),
+                // (26,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 8
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(26, 15),
+                // (32,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 9, 10
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(32, 15),
+                // (32,15): error CS0165: Use of unassigned local variable 'obj'
+                //             ? obj.ToString() // 9, 10
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj").WithArguments("obj").WithLocation(32, 15),
+                // (33,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 11
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(33, 15)
+                );
+        }
+
+        [Theory]
+        [InlineData("[NotNullWhen(true)] out object? obj")]
+        [InlineData("[MaybeNullWhen(false)] out object obj")]
+        public void EqualsCondAccess_NotNullWhenTrue_RightBool(string param)
+        {
+            var source = @"
+using System.Diagnostics.CodeAnalysis;
+
+class C
+{
+    bool M0(" + param + @") { obj = new object(); return true; }
+
+    static void M1(C? c, bool b)
+    {
+        _ = c?.M0(out var obj1) == b
+            ? obj1.ToString() // 1
+            : """";
+    }
+
+    static void M2(C? c, bool b)
+    {
+        _ = c?.M0(out var obj2) == b
+            ? """"
+            : obj2.ToString(); // 2, 3
+    }
+
+    static void M3(C? c, bool b)
+    {
+        _ = c?.M0(out var obj3) != b
+            ? obj3.ToString() // 4, 5
+            : """";
+    }
+
+    static void M4(C? c, bool b)
+    {
+        _ = c?.M0(out var obj4) != b
+            ? """"
+            : obj4.ToString(); // 6
+    }
+}
+";
+            var comp = CreateNullableCompilation(new[] { source, NotNullWhenAttributeDefinition, MaybeNullWhenAttributeDefinition });
+            comp.VerifyDiagnostics(
+                // (11,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj1.ToString() // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj1").WithLocation(11, 15),
+                // (19,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj2.ToString(); // 2, 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj2").WithLocation(19, 15),
+                // (19,15): error CS0165: Use of unassigned local variable 'obj2'
+                //             : obj2.ToString(); // 2, 3
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj2").WithArguments("obj2").WithLocation(19, 15),
+                // (25,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj3.ToString() // 4, 5
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj3").WithLocation(25, 15),
+                // (25,15): error CS0165: Use of unassigned local variable 'obj3'
+                //             ? obj3.ToString() // 4, 5
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj3").WithArguments("obj3").WithLocation(25, 15),
+                // (33,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj4.ToString(); // 6
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj4").WithLocation(33, 15)
+                );
+        }
+
+        [Theory]
+        [InlineData("[NotNullWhen(true)] out object? obj")]
+        [InlineData("[MaybeNullWhen(false)] out object obj")]
+        public void EqualsCondAccess_NotNullWhenTrue_LeftBool(string param)
+        {
+            var source = @"
+using System.Diagnostics.CodeAnalysis;
+
+class C
+{
+    bool M0(" + param + @") { obj = new object(); return true; }
+
+    static void M1(C? c, bool b)
+    {
+        _ = b == c?.M0(out var obj1)
+            ? obj1.ToString() // 1
+            : """";
+    }
+
+    static void M2(C? c, bool b)
+    {
+        _ = b == c?.M0(out var obj2)
+            ? """"
+            : obj2.ToString(); // 2, 3
+    }
+
+    static void M3(C? c, bool b)
+    {
+        _ = b != c?.M0(out var obj3)
+            ? obj3.ToString() // 4, 5
+            : """";
+    }
+
+    static void M4(C? c, bool b)
+    {
+        _ = b != c?.M0(out var obj4)
+            ? """"
+            : obj4.ToString(); // 6
+    }
+}
+";
+            var comp = CreateNullableCompilation(new[] { source, NotNullWhenAttributeDefinition, MaybeNullWhenAttributeDefinition });
+            comp.VerifyDiagnostics(
+                // (11,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj1.ToString() // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj1").WithLocation(11, 15),
+                // (19,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj2.ToString(); // 2, 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj2").WithLocation(19, 15),
+                // (19,15): error CS0165: Use of unassigned local variable 'obj2'
+                //             : obj2.ToString(); // 2, 3
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj2").WithArguments("obj2").WithLocation(19, 15),
+                // (25,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj3.ToString() // 4, 5
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj3").WithLocation(25, 15),
+                // (25,15): error CS0165: Use of unassigned local variable 'obj3'
+                //             ? obj3.ToString() // 4, 5
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj3").WithArguments("obj3").WithLocation(25, 15),
+                // (33,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj4.ToString(); // 6
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj4").WithLocation(33, 15)
+                );
+        }
+
+        [Theory]
+        [InlineData("[NotNullWhen(true)] out object? obj")]
+        [InlineData("[MaybeNullWhen(false)] out object obj")]
+        public void EqualsCondAccess_NotNullWhenTrue_RightNullableBool(string param)
+        {
+            var source = @"
+using System.Diagnostics.CodeAnalysis;
+
+class C
+{
+    bool M0(" + param + @") { obj = new object(); return true; }
+
+    static void M1(C? c)
+    {
+        _ = c?.M0(out var obj) == null
+            ? obj.ToString() // 1, 2
+            : obj.ToString(); // 3
+    }
+
+    static void M2(C? c)
+    {
+        _ = c?.M0(out var obj) != null
+            ? obj.ToString() // 4
+            : obj.ToString(); // 5, 6
+    }
+
+    static void M3(C? c, bool? b)
+    {
+        _ = c?.M0(out var obj1) == b
+            ? obj1.ToString() // 7, 8
+            : """"; // 9, 10
+
+        _ = c?.M0(out var obj2) == b
+            ? """" // 7, 8
+            : obj2.ToString(); // 9, 10
+    }
+
+    static void M4(C? c, bool? b)
+    {
+        _ = c?.M0(out var obj1) != b
+            ? obj1.ToString() // 11, 12
+            : """"; // 9, 10
+
+        _ = c?.M0(out var obj2) != b
+            ? """" // 7, 8
+            : obj2.ToString(); // 13, 14
+    }
+}
+";
+            var comp = CreateNullableCompilation(new[] { source, NotNullWhenAttributeDefinition, MaybeNullWhenAttributeDefinition });
+            comp.VerifyDiagnostics(
+                // (11,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 1, 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(11, 15),
+                // (11,15): error CS0165: Use of unassigned local variable 'obj'
+                //             ? obj.ToString() // 1, 2
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj").WithArguments("obj").WithLocation(11, 15),
+                // (12,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(12, 15),
+                // (18,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(18, 15),
+                // (19,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 5, 6
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(19, 15),
+                // (19,15): error CS0165: Use of unassigned local variable 'obj'
+                //             : obj.ToString(); // 5, 6
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj").WithArguments("obj").WithLocation(19, 15),
+                // (25,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj1.ToString() // 7, 8
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj1").WithLocation(25, 15),
+                // (25,15): error CS0165: Use of unassigned local variable 'obj1'
+                //             ? obj1.ToString() // 7, 8
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj1").WithArguments("obj1").WithLocation(25, 15),
+                // (30,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj2.ToString(); // 9, 10
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj2").WithLocation(30, 15),
+                // (30,15): error CS0165: Use of unassigned local variable 'obj2'
+                //             : obj2.ToString(); // 9, 10
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj2").WithArguments("obj2").WithLocation(30, 15),
+                // (36,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj1.ToString() // 11, 12
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj1").WithLocation(36, 15),
+                // (36,15): error CS0165: Use of unassigned local variable 'obj1'
+                //             ? obj1.ToString() // 11, 12
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj1").WithArguments("obj1").WithLocation(36, 15),
+                // (41,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj2.ToString(); // 13, 14
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj2").WithLocation(41, 15),
+                // (41,15): error CS0165: Use of unassigned local variable 'obj2'
+                //             : obj2.ToString(); // 13, 14
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj2").WithArguments("obj2").WithLocation(41, 15)
+                );
+        }
+
+        [Theory]
+        [InlineData("[NotNullWhen(true)] out object? obj")]
+        [InlineData("[MaybeNullWhen(false)] out object obj")]
+        public void EqualsCondAccess_NotNullWhenTrue_LeftNullableBool(string param)
+        {
+            var source = @"
+using System.Diagnostics.CodeAnalysis;
+
+class C
+{
+    bool M0(" + param + @") { obj = new object(); return true; }
+
+    static void M1(C? c)
+    {
+        _ = null == c?.M0(out var obj)
+            ? obj.ToString() // 1, 2
+            : obj.ToString(); // 3
+    }
+
+    static void M2(C? c)
+    {
+        _ = null != c?.M0(out var obj)
+            ? obj.ToString() // 4
+            : obj.ToString(); // 5, 6
+    }
+
+    static void M3(C? c, bool? b)
+    {
+        _ = b == c?.M0(out var obj1)
+            ? obj1.ToString() // 7, 8
+            : """"; // 9, 10
+
+        _ = b == c?.M0(out var obj2)
+            ? """" // 7, 8
+            : obj2.ToString(); // 9, 10
+    }
+
+    static void M4(C? c, bool? b)
+    {
+        _ = b != c?.M0(out var obj1)
+            ? obj1.ToString() // 11, 12
+            : """"; // 9, 10
+
+        _ = b != c?.M0(out var obj2)
+            ? """" // 7, 8
+            : obj2.ToString(); // 13, 14
+    }
+}
+";
+            var comp = CreateNullableCompilation(new[] { source, NotNullWhenAttributeDefinition, MaybeNullWhenAttributeDefinition });
+            comp.VerifyDiagnostics(
+                // (11,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 1, 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(11, 15),
+                // (11,15): error CS0165: Use of unassigned local variable 'obj'
+                //             ? obj.ToString() // 1, 2
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj").WithArguments("obj").WithLocation(11, 15),
+                // (12,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(12, 15),
+                // (18,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(18, 15),
+                // (19,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 5, 6
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(19, 15),
+                // (19,15): error CS0165: Use of unassigned local variable 'obj'
+                //             : obj.ToString(); // 5, 6
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj").WithArguments("obj").WithLocation(19, 15),
+                // (25,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj1.ToString() // 7, 8
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj1").WithLocation(25, 15),
+                // (25,15): error CS0165: Use of unassigned local variable 'obj1'
+                //             ? obj1.ToString() // 7, 8
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj1").WithArguments("obj1").WithLocation(25, 15),
+                // (30,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj2.ToString(); // 9, 10
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj2").WithLocation(30, 15),
+                // (30,15): error CS0165: Use of unassigned local variable 'obj2'
+                //             : obj2.ToString(); // 9, 10
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj2").WithArguments("obj2").WithLocation(30, 15),
+                // (36,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj1.ToString() // 11, 12
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj1").WithLocation(36, 15),
+                // (36,15): error CS0165: Use of unassigned local variable 'obj1'
+                //             ? obj1.ToString() // 11, 12
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj1").WithArguments("obj1").WithLocation(36, 15),
+                // (41,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj2.ToString(); // 13, 14
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj2").WithLocation(41, 15),
+                // (41,15): error CS0165: Use of unassigned local variable 'obj2'
+                //             : obj2.ToString(); // 13, 14
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj2").WithArguments("obj2").WithLocation(41, 15)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_01"/>.</remarks>
+        [Theory]
+        [InlineData("b")]
+        [InlineData("true")]
+        [InlineData("false")]
+        public void EqualsCondAccess_01(string operand)
+        {
+            var source = @"
+class C
+{
+    public bool M0(out object x) { x = 42; return true; }
+
+    public void M1(C? c, object? x, bool b)
+    {
+        _ = c?.M0(out x) == " + operand + @"
+            ? x.ToString()
+            : x.ToString(); // 1
+    }
+
+    public void M2(C? c, object? x, bool b)
+    {
+        _ = c?.M0(out x) != " + operand + @"
+            ? x.ToString() // 2
+            : x.ToString();
+    }
+
+    public void M3(C? c, object? x, bool b)
+    {
+        _ = " + operand + @" == c?.M0(out x)
+            ? x.ToString()
+            : x.ToString(); // 3
+    }
+
+    public void M4(C? c, object? x, bool b)
+    {
+        _ = " + operand + @" != c?.M0(out x)
+            ? x.ToString() // 4
+            : x.ToString();
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (10,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(10, 15),
+                // (16,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(16, 15),
+                // (24,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(24, 15),
+                // (30,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(30, 15)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_02"/>.</remarks>
+        [Theory]
+        [InlineData("i")]
+        [InlineData("42")]
+        public void EqualsCondAccess_02(string operand)
+        {
+            var source = @"
+class C
+{
+    public int M0(out object x) { x = 1; return 0; }
+
+    public void M1(C? c, object? x, int i)
+    {
+        _ = c?.M0(out x) == " + operand + @"
+            ? x.ToString()
+            : x.ToString(); // 1
+    }
+
+    public void M2(C? c, object? x, int i)
+    {
+        _ = c?.M0(out x) != " + operand + @"
+            ? x.ToString() // 2
+            : x.ToString();
+    }
+
+    public void M3(C? c, object? x, int i)
+    {
+        _ = " + operand + @" == c?.M0(out x)
+            ? x.ToString()
+            : x.ToString(); // 3
+    }
+
+    public void M4(C? c, object? x, int i)
+    {
+        _ = " + operand + @" != c?.M0(out x)
+            ? x.ToString() // 4
+            : x.ToString();
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (10,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(10, 15),
+                // (16,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(16, 15),
+                // (24,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(24, 15),
+                // (30,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(30, 15)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_03"/>.</remarks>
+        [Theory]
+        [InlineData("object?")]
+        [InlineData("int?")]
+        [InlineData("bool?")]
+        public void EqualsCondAccess_03(string returnType)
+        {
+            var source = @"
+class C
+{
+    public " + returnType + @" M0(out object x) { x = 42; return null; }
+
+    public void M1(C? c, object? x)
+    {
+        _ = c?.M0(out x) != null
+            ? x.ToString()
+            : x.ToString(); // 1
+    }
+
+    public void M2(C? c, object? x)
+    {
+        _ = c?.M0(out x) == null
+            ? x.ToString() // 2
+            : x.ToString();
+    }
+
+    public void M3(C? c, object? x)
+    {
+        _ = null != c?.M0(out x)
+            ? x.ToString()
+            : x.ToString(); // 3
+    }
+
+    public void M4(C? c, object? x)
+    {
+        _ = null == c?.M0(out x)
+            ? x.ToString() // 4
+            : x.ToString();
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (10,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(10, 15),
+                // (16,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(16, 15),
+                // (24,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(24, 15),
+                // (30,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(30, 15)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_04"/>.</remarks>
+        [Theory]
+        [InlineData("bool", "false")]
+        [InlineData("int", "1")]
+        [InlineData("object", "1")]
+        public void EqualsCondAccess_04_01(string returnType, string returnValue)
+        {
+            var source = @"
+class C
+{
+    public " + returnType + @" M0(out object x) { x = 42; return " + returnValue + @"; }
+
+    public void M1(C? c, object? x, object? y)
+    {
+        _ = c?.M0(out x) == c!.M0(out y)
+            ? x.ToString() + y.ToString()
+            : x.ToString() + y.ToString(); // 1
+    }
+
+    public void M2(C? c, object? x, object? y)
+    {
+        _ = c?.M0(out x) != c!.M0(out y)
+            ? x.ToString() + y.ToString() // 2
+            : x.ToString() + y.ToString();
+    }
+
+    public void M3(C? c, object? x, object? y)
+    {
+        _ = c!.M0(out x) == c?.M0(out y)
+            ? x.ToString() + y.ToString()
+            : x.ToString() + y.ToString(); // 3
+    }
+
+    public void M4(C? c, object? x, object? y)
+    {
+        _ = c!.M0(out x) != c?.M0(out y)
+            ? x.ToString() + y.ToString() // 4
+            : x.ToString() + y.ToString();
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (10,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString() + y.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(10, 15),
+                // (16,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() + y.ToString() // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(16, 15),
+                // (24,30): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString() + y.ToString(); // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "y").WithLocation(24, 30),
+                // (30,30): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() + y.ToString() // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "y").WithLocation(30, 30)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_04"/>.</remarks>
+        [Fact]
+        public void EqualsCondAccess_04_02()
+        {
+            var source = @"
+class C
+{
+    public object? M0(out object x) { x = 42; return null; }
+
+    public void M1(C? c, object? x, object? y)
+    {
+        _ = c?.M0(out x) == c!.M0(out y)
+            ? x.ToString() + y.ToString() // 1
+            : x.ToString() + y.ToString(); // 2
+    }
+
+    public void M2(C? c, object? x, object? y)
+    {
+        _ = c?.M0(out x) != c!.M0(out y)
+            ? x.ToString() + y.ToString() // 3
+            : x.ToString() + y.ToString(); // 4
+    }
+
+    public void M3(C? c, object? x, object? y)
+    {
+        _ = c!.M0(out x) == c?.M0(out y)
+            ? x.ToString() + y.ToString() // 5
+            : x.ToString() + y.ToString(); // 6
+    }
+
+    public void M4(C? c, object? x, object? y)
+    {
+        _ = c!.M0(out x) != c?.M0(out y)
+            ? x.ToString() + y.ToString() // 7
+            : x.ToString() + y.ToString(); // 8
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (9,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() + y.ToString() // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(9, 15),
+                // (10,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString() + y.ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(10, 15),
+                // (16,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() + y.ToString() // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(16, 15),
+                // (17,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString() + y.ToString(); // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(17, 15),
+                // (23,30): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() + y.ToString() // 5
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "y").WithLocation(23, 30),
+                // (24,30): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString() + y.ToString(); // 6
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "y").WithLocation(24, 30),
+                // (30,30): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() + y.ToString() // 7
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "y").WithLocation(30, 30),
+                // (31,30): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString() + y.ToString(); // 8
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "y").WithLocation(31, 30)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_04"/>.</remarks>
+        [Fact]
+        public void EqualsCondAccess_04_03()
+        {
+            var source = @"
+class C
+{
+    public object M0(object? x) => new object();
+
+    public void M1(C? c, object? x)
+    {
+        _ = c?.M0(x = null) == c!.M0(x = new object())
+            ? x.ToString()
+            : x.ToString();
+    }
+
+    public void M2(C? c, object? x)
+    {
+        _ = c?.M0(x = new object()) != c!.M0(x = null)
+            ? x.ToString() // 1
+            : x.ToString(); // 2
+    }
+
+    public void M3(C? c, object? x)
+    {
+        _ = c!.M0(x = new object()) != c?.M0(x = null)
+            ? x.ToString() // 3
+            : x.ToString(); // 4
+    }
+
+    public void M4(C? c, object? x)
+    {
+        _ = c!.M0(x = null) != c?.M0(x = new object())
+            ? x.ToString() // 5
+            : x.ToString();
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (16,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(16, 15),
+                // (17,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(17, 15),
+                // (23,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(23, 15),
+                // (24,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(24, 15),
+                // (30,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 5
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(30, 15)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_04"/>.</remarks>
+        [Fact]
+        public void EqualsCondAccess_04_04()
+        {
+            var source = @"
+class C
+{
+    public object M0(object? x) => new object();
+
+    public void M1(C? c, object? x, object? y)
+    {
+        _ = c?.M0(x = new object()) == c!.M0(y = x)
+            ? y.ToString()
+            : y.ToString(); // 1
+    }
+
+    public void M2(C? c, object? x, object? y)
+    {
+        _ = c?.M0(x = new object()) != c!.M0(y = x)
+            ? y.ToString() // 2
+            : y.ToString();
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (10,15): warning CS8602: Dereference of a possibly null reference.
+                //             : y.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "y").WithLocation(10, 15),
+                // (16,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? y.ToString() // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "y").WithLocation(16, 15)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_05"/>.</remarks>
+        [Fact]
+        public void EqualsCondAccess_05()
+        {
+            var source = @"
+class C
+{
+    public static bool operator ==(C? left, C? right) => false;
+    public static bool operator !=(C? left, C? right) => false;
+    public override bool Equals(object obj) => false;
+    public override int GetHashCode() => 0;
+
+    public C? M0(out object x) { x = 42; return this; }
+
+    public void M1(C? c, object? x)
+    {
+        _ = c?.M0(out x) != null
+            ? x.ToString() 
+            : x.ToString(); // 1
+    }
+
+    public void M2(C? c, object? x)
+    {
+        _ = c?.M0(out x) == null
+            ? x.ToString() // 2
+            : x.ToString();
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (15,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(15, 15),
+                // (21,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(21, 15)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_06"/>.</remarks>
+        [Fact]
+        public void EqualsCondAccess_06()
+        {
+            var source = @"
+class C
+{
+    public C? M0(out object x) { x = 42; return this; }
+
+    public void M1(C c, object? x, object? y)
+    {
+        _ = c.M0(out x)?.M0(out y) != null
+            ? x.ToString() + y.ToString()
+            : x.ToString() + y.ToString(); // 1
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (10,30): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString() + y.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "y").WithLocation(10, 30)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_07"/>.</remarks>
+        [Fact]
+        public void EqualsCondAccess_07()
+        {
+            var source = @"
+struct S
+{
+    public static bool operator ==(S left, S right) => false;
+    public static bool operator !=(S left, S right) => false;
+    public override bool Equals(object obj) => false;
+    public override int GetHashCode() => 0;
+
+    public S M0(out object x) { x = 42; return this; }
+
+    public void M1(S? s, object? x)
+    {
+        _ = s?.M0(out x) != null
+            ? x.ToString()
+            : x.ToString(); // 1
+    }
+
+    public void M2(S? s, object? x)
+    {
+        _ = s?.M0(out x) == null
+            ? x.ToString() // 2
+            : x.ToString();
+    }
+
+    public void M3(S? s, object? x)
+    {
+        _ = null != s?.M0(out x)
+            ? x.ToString()
+            : x.ToString(); // 3
+    }
+
+    public void M4(S? s, object? x)
+    {
+        _ = null == s?.M0(out x)
+            ? x.ToString() // 4
+            : x.ToString();
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (15,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(15, 15),
+                // (21,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(21, 15),
+                // (29,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(29, 15),
+                // (35,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(35, 15)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_08"/>.</remarks>
+        [Fact]
+        public void EqualsCondAccess_08()
+        {
+            var source = @"
+#nullable enable
+
+struct S
+{
+    public static bool operator ==(S left, S right) => false;
+    public static bool operator !=(S left, S right) => false;
+    public override bool Equals(object obj) => false;
+    public override int GetHashCode() => 0;
+
+    public S M0(out object x) { x = 42; return this; }
+
+    public void M1(S? s, object? x)
+    {
+        _ = s?.M0(out x) != new S()
+            ? x.ToString() // 1
+            : x.ToString();
+    }
+
+    public void M2(S? s, object? x)
+    {
+        _ = s?.M0(out x) == new S()
+            ? x.ToString()
+            : x.ToString(); // 2
+    }
+
+    public void M3(S? s, object? x)
+    {
+        _ = new S() != s?.M0(out x)
+            ? x.ToString() // 3
+            : x.ToString();
+    }
+
+    public void M4(S? s, object? x)
+    {
+        _ = new S() == s?.M0(out x)
+            ? x.ToString()
+            : x.ToString(); // 4
+    }
+}
+";
+            CreateCompilation(source).VerifyDiagnostics(
+                // (16,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(16, 15),
+                // (24,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(24, 15),
+                // (30,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(30, 15),
+                // (38,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(38, 15)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_09"/>.</remarks>
+        [Fact]
+        public void EqualsCondAccess_09()
+        {
+            var source = @"
+struct S
+{
+    public static bool operator ==(S left, S right) => false;
+    public static bool operator !=(S left, S right) => false;
+    public override bool Equals(object obj) => false;
+    public override int GetHashCode() => 0;
+
+    public S M0(out object x) { x = 42; return this; }
+
+    public void M1(S? s, object? x)
+    {
+        _ = s?.M0(out x) != s
+            ? x.ToString() // 1
+            : x.ToString(); // 2
+    }
+
+    public void M2(S? s, object? x)
+    {
+        _ = s?.M0(out x) == s
+            ? x.ToString() // 3
+            : x.ToString(); // 4
+    }
+
+    public void M3(S? s, object? x)
+    {
+        _ = s != s?.M0(out x)
+            ? x.ToString() // 5
+            : x.ToString(); // 6
+    }
+
+    public void M4(S? s, object? x)
+    {
+        _ = s == s?.M0(out x)
+            ? x.ToString() // 7
+            : x.ToString(); // 8
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (14,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(14, 15),
+                // (15,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(15, 15),
+                // (21,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(21, 15),
+                // (22,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(22, 15),
+                // (28,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 5
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(28, 15),
+                // (29,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 6
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(29, 15),
+                // (35,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 7
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(35, 15),
+                // (36,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 8
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(36, 15)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_10"/>.</remarks>
+        [Theory]
+        [InlineData("S? left, S? right")]
+        [InlineData("S? left, S right")]
+        public void EqualsCondAccess_10(string operatorParameters)
+        {
+            var source = @"
+struct S
+{
+    public static bool operator ==(" + operatorParameters + @") => false;
+    public static bool operator !=(" + operatorParameters + @") => false;
+    public override bool Equals(object obj) => false;
+    public override int GetHashCode() => 0;
+
+    public S M0(out object x) { x = 42; return this; }
+
+    public void M1(S? s, object? x)
+    {
+        _ = s?.M0(out x) != new S()
+            ? x.ToString() // 1
+            : x.ToString();
+    }
+
+    public void M2(S? s, object? x)
+    {
+        _ = s?.M0(out x) == new S()
+            ? x.ToString()
+            : x.ToString(); // 2
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (14,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(14, 15),
+                // (22,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(22, 15)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_11"/>.</remarks>
+        [Fact]
+        public void EqualsCondAccess_11()
+        {
+            var source = @"
+struct T
+{
+    public static implicit operator S(T t) => new S();
+    public T M0(out object x) { x = 42; return this; }
+}
+
+struct S
+{
+    public static bool operator ==(S left, S right) => false;
+    public static bool operator !=(S left, S right) => false;
+    public override bool Equals(object obj) => false;
+    public override int GetHashCode() => 0;
+
+    public void M1(T? t, object? x)
+    {
+        _ = t?.M0(out x) != new S()
+            ? x.ToString() // 1
+            : x.ToString();
+    }
+
+    public void M2(T? t, object? x)
+    {
+        _ = t?.M0(out x) == new S()
+            ? x.ToString()
+            : x.ToString(); // 2
+    }
+
+    public void M3(T? t, object? x)
+    {
+        _ = new S() != t?.M0(out x)
+            ? x.ToString() // 3
+            : x.ToString();
+    }
+
+    public void M4(T? t, object? x)
+    {
+        _ = new S() == t?.M0(out x)
+            ? x.ToString()
+            : x.ToString(); // 4
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (18,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(18, 15),
+                // (26,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(26, 15),
+                // (32,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(32, 15),
+                // (40,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(40, 15)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_12"/>.</remarks>
+        [Fact]
+        public void EqualsCondAccess_12()
+        {
+            var source = @"
+class C
+{
+    int? M0(object obj) => null;
+
+    void M1(C? c, object? x, object? obj)
+    {
+        _ = (c?.M0(x = 0) == (int?)obj)
+            ? x.ToString() // 1
+            : x.ToString(); // 2
+    }
+
+    void M2(C? c, object? x, object? obj)
+    {
+        _ = (c?.M0(x = 0) == (int?)null)
+            ? x.ToString() // 3
+            : x.ToString();
+    }
+
+    void M3(C? c, object? x, object? obj)
+    {
+        _ = (c?.M0(x = 0) == null)
+            ? x.ToString() // 4
+            : x.ToString();
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (9,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(9, 15),
+                // (10,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(10, 15),
+                // (16,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(16, 15),
+                // (23,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(23, 15)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_13"/>.</remarks>
+        [Fact]
+        public void EqualsCondAccess_13()
+        {
+            var source = @"
+class C
+{
+    long? M0(object obj) => null;
+    void M(C? c, object? x, int i)
+    {
+        _ = (c?.M0(x = 0) == i)
+            ? x.ToString()
+            : x.ToString(); // 1
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (9,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(9, 15)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_14"/>.</remarks>
+        [Fact]
+        public void EqualsCondAccess_14()
+        {
+            var source = @"
+using System.Diagnostics.CodeAnalysis;
+
+class C
+{
+    long? M0(object obj) => null;
+
+    void M1(C? c, object? x, int? i)
+    {
+        _ = (c?.M0(x = 0) == i)
+            ? x.ToString() // 1
+            : x.ToString(); // 2
+    }
+
+    void M2(C? c, object? x, int? i)
+    {
+        if (i is null) throw null!;
+
+        _ = (c?.M0(x = 0) == i)
+            ? x.ToString()
+            : x.ToString(); // 3
+    }
+
+    void M3(C? c, object? x, [DisallowNull] int? i)
+    {
+        _ = (c?.M0(x = 0) == i)
+            ? x.ToString()
+            : x.ToString(); // 4
+    }
+}
+";
+            CreateNullableCompilation(new[] { source, DisallowNullAttributeDefinition }).VerifyDiagnostics(
+                // (11,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(11, 15),
+                // (12,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(12, 15),
+                // (21,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(21, 15),
+                // (28,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(28, 15)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_15"/>.</remarks>
+        [Fact]
+        public void EqualsCondAccess_15()
+        {
+            var source = @"
+class C
+{
+    C M0(object obj) => this;
+    void M(C? c, object? x)
+    {
+        _ = ((object?)c?.M0(x = 0) != null)
+            ? x.ToString()
+            : x.ToString(); // 1
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (9,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(9, 15)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_16"/>.</remarks>
+        [Fact]
+        public void EqualsCondAccess_16()
+        {
+            var source = @"
+class C
+{
+    void M(object? x)
+    {
+        _ = ""a""?.Equals(x = 0) == true
+            ? x.ToString()
+            : x.ToString();
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_17"/>.</remarks>
+        [Fact]
+        public void EqualsCondAccess_17()
+        {
+            var source = @"
+class C
+{
+    void M(C? c, object? x, object? y)
+    {
+        _ = (c?.Equals(x = 0), c?.Equals(y = 0)) == (true, true)
+            ? x.ToString() // 1
+            : y.ToString(); // 2
+    }
+}
+";
+            // https://github.com/dotnet/roslyn/issues/50980
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (7,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(7, 15),
+                // (8,15): warning CS8602: Dereference of a possibly null reference.
+                //             : y.ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "y").WithLocation(8, 15)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_18"/>.</remarks>
+        [Fact]
+        public void EqualsCondAccess_18()
+        {
+            var source = @"
+class C
+{
+    public static bool operator ==(C? left, C? right) => false;
+    public static bool operator !=(C? left, C? right) => false;
+    public override bool Equals(object obj) => false;
+    public override int GetHashCode() => 0;
+
+    public C M0(out object x) { x = 42; return this; }
+
+    public void M1(C? c, object? x)
+    {
+        _ = c?.M0(out x) != null
+            ? x.ToString()
+            : x.ToString(); // 1
+    }
+
+    public void M2(C? c, object? x)
+    {
+        _ = c?.M0(out x) == null
+            ? x.ToString() // 2
+            : x.ToString();
+    }
+
+    public void M3(C? c, object? x)
+    {
+        _ = null != c?.M0(out x)
+            ? x.ToString()
+            : x.ToString(); // 3
+    }
+
+    public void M4(C? c, object? x)
+    {
+        _ = null == c?.M0(out x)
+            ? x.ToString() // 4
+            : x.ToString();
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (15,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(15, 15),
+                // (21,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(21, 15),
+                // (29,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(29, 15),
+                // (35,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(35, 15)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_19"/>.</remarks>
+        [Fact]
+        public void EqualsCondAccess_19()
+        {
+            var source = @"
+class C
+{
+    public string M0(object obj) => obj.ToString();
+
+    public void M1(C? c, object? x, object? y)
+    {
+        _ = c?.M0(x = y = 1) != x.ToString() // 1
+            ? y.ToString() // 2
+            : y.ToString();
+    }
+
+    public void M2(C? c, object? x, object? y)
+    {
+        _ = x.ToString() != c?.M0(x = y = 1) // 3
+            ? y.ToString() // 4
+            : y.ToString();
+    }
+
+    public void M3(C? c, string? x)
+    {
+        _ = c?.M0(x = ""a"") != x
+            ? x.ToString() // 5
+            : x.ToString(); // 6
+    }
+
+    public void M4(C? c, string? x)
+    {
+        _ = x != c?.M0(x = ""a"")
+            ? x.ToString() // 7
+            : x.ToString(); // 8
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (8,33): warning CS8602: Dereference of a possibly null reference.
+                //         _ = c?.M0(x = y = 1) != x.ToString() // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(8, 33),
+                // (9,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? y.ToString() // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "y").WithLocation(9, 15),
+                // (15,13): warning CS8602: Dereference of a possibly null reference.
+                //         _ = x.ToString() != c?.M0(x = y = 1) // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(15, 13),
+                // (16,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? y.ToString() // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "y").WithLocation(16, 15),
+                // (23,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 5
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(23, 15),
+                // (24,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 6
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(24, 15),
+                // (30,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 7
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(30, 15),
+                // (31,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 8
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(31, 15)
+                );
+        }
+
+        [Fact]
+        public void EqualsBoolConstant_UserDefinedOperator_BoolRight()
+        {
+            var source = @"
+class C
+{
+    public static bool operator ==(C? left, bool right) => false;
+    public static bool operator !=(C? left, bool right) => false;
+    public override bool Equals(object obj) => false;
+    public override int GetHashCode() => 0;
+
+    public void M1(C? c, object? x)
+    {
+        _ = c == (x != null)
+            ? x.ToString() // 1
+            : x.ToString(); // 2
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (12,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(12, 15),
+                // (13,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(13, 15)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.IsCondAccess_01"/>.</remarks>
+        [Fact]
+        public void IsCondAccess_01()
+        {
+            var source = @"
+class C
+{
+    C M0(object obj) => this;
+
+    void M1(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is C
+            ? x.ToString()
+            : x.ToString(); // 1
+    }
+
+    void M2(C? c, object? x)
+    {
+        _ = c?.Equals(x = 0) is bool
+            ? x.ToString()
+            : x.ToString(); // 2
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (10,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(10, 15),
+                // (17,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(17, 15)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.IsCondAccess_02"/>.</remarks>
+        [Fact]
+        public void IsCondAccess_02()
+        {
+            var source = @"
+class C
+{
+    C M0(object obj) => this;
+
+    void M1(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is (_)
+            ? x.ToString() // 1
+            : x.ToString(); // unreachable
+    }
+
+    void M2(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is var y
+            ? x.ToString() // 2
+            : x.ToString(); // unreachable
+    }
+
+    void M3(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is { }
+            ? x.ToString()
+            : x.ToString(); // 3
+    }
+
+    void M4(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is { } c1
+            ? x.ToString()
+            : x.ToString(); // 4
+    }
+
+    void M5(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is C c1
+            ? x.ToString()
+            : x.ToString(); // 5
+    }
+
+    void M6(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is not null
+            ? x.ToString()
+            : x.ToString(); // 6
+    }
+
+    void M7(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is not C
+            ? x.ToString() // 7
+            : x.ToString();
+    }
+
+    void M8(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is null
+            ? x.ToString() // 8
+            : x.ToString();
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (9,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(9, 15),
+                // (16,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(16, 15),
+                // (24,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(24, 15),
+                // (31,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(31, 15),
+                // (38,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 5
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(38, 15),
+                // (45,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 6
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(45, 15),
+                // (51,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 7
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(51, 15),
+                // (58,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 8
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(58, 15)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.IsCondAccess_03"/>.</remarks>
+        [Fact]
+        public void IsCondAccess_03()
+        {
+            var source = @"
+#nullable enable
+
+class C
+{
+    (C, C) M0(object obj) => (this, this);
+
+    void M1(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is (_, _)
+            ? x.ToString()
+            : x.ToString(); // 1
+    }
+
+    void M2(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is not null
+            ? x.ToString()
+            : x.ToString(); // 2
+    }
+
+    void M3(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is (not null, null)
+            ? x.ToString()
+            : x.ToString(); // 3
+    }
+
+    void M4(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is null
+            ? x.ToString() // 4
+            : x.ToString();
+    }
+
+    void M5(C? c, object? x, object? y)
+    {
+        _ = (c?.M0(x = 0), c?.M0(y = 0)) is (not null, not null)
+            ? x.ToString() // 5
+            : y.ToString(); // 6
+    }
+}
+";
+            // note: "state when not null" is not tracked when pattern matching against tuples containing conditional accesses.
+            CreateCompilation(source).VerifyDiagnostics(
+                // (12,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(12, 15),
+                // (19,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(19, 15),
+                // (26,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(26, 15),
+                // (32,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(32, 15),
+                // (39,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 5
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(39, 15),
+                // (40,15): warning CS8602: Dereference of a possibly null reference.
+                //             : y.ToString(); // 6
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "y").WithLocation(40, 15)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.IsCondAccess_04"/>.</remarks>
+        [Fact]
+        public void IsCondAccess_04()
+        {
+            var source = @"
+#pragma warning disable 8794 // An expression always matches the provided pattern
+
+class C
+{
+    C M0(object obj) => this;
+
+    void M1(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is null or not null
+            ? x.ToString() // 1
+            : x.ToString(); // unreachable
+    }
+
+    void M2(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is C or null
+            ? x.ToString() // 2
+            : x.ToString(); // unreachable
+    }
+
+    void M3(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is not null and C
+            ? x.ToString()
+            : x.ToString(); // 3
+    }
+
+    void M4(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is null
+            ? x.ToString() // 4
+            : x.ToString();
+    }
+
+    void M5(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is not (C or { })
+            ? x.ToString() // 5
+            : x.ToString();
+    }
+
+    void M6(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is _ and C
+            ? x.ToString()
+            : x.ToString(); // 6
+    }
+
+    void M7(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is C and _
+            ? x.ToString()
+            : x.ToString(); // 7
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (11,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(11, 15),
+                // (18,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(18, 15),
+                // (26,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(26, 15),
+                // (32,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(32, 15),
+                // (39,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 5
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(39, 15),
+                // (47,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 6
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(47, 15),
+                // (54,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 7
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(54, 15)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.IsCondAccess_05"/>.</remarks>
+        [Theory]
+        [InlineData("int")]
+        [InlineData("int?")]
+        public void IsCondAccess_05(string returnType)
+        {
+            var source = @"
+class C
+{
+    " + returnType + @" M0(object obj) => 1;
+
+    void M1(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is 1
+            ? x.ToString()
+            : x.ToString(); // 1
+    }
+
+    void M2(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is > 10
+            ? x.ToString()
+            : x.ToString(); // 2
+    }
+
+    void M3(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is > 10 or < 0
+            ? x.ToString()
+            : x.ToString(); // 3
+    }
+
+    void M4(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is 1 or 2
+            ? x.ToString()
+            : x.ToString(); // 4
+    }
+
+    void M5(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is null
+            ? x.ToString() // 5
+            : x.ToString();
+    }
+
+    void M6(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is not null
+            ? x.ToString()
+            : x.ToString(); // 6
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (10,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(10, 15),
+                // (17,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(17, 15),
+                // (24,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(24, 15),
+                // (31,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(31, 15),
+                // (37,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 5
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(37, 15),
+                // (45,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 6
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(45, 15)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.IsCondAccess_06"/>.</remarks>
+        [Fact]
+        public void IsCondAccess_06()
+        {
+            var source = @"
+class C
+{
+    int M0(object obj) => 1;
+
+    void M1(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is not null is true
+            ? x.ToString()
+            : x.ToString(); // 1
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (10,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(10, 15)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.IsCondAccess_07"/>.</remarks>
+        [Fact]
+        public void IsCondAccess_07()
+        {
+            var source = @"
+class C
+{
+    bool M0(object obj) => false;
+
+    void M1(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is true or false
+            ? x.ToString()
+            : x.ToString(); // 1
+    }
+
+    void M2(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is not (true or false)
+            ? x.ToString() // 2
+            : x.ToString();
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (10,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(10, 15),
+                // (16,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(16, 15)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.IsCondAccess_08"/>.</remarks>
+        [Fact]
+        public void IsCondAccess_08()
+        {
+            var source = @"
+#nullable enable
+class C
+{
+    bool M0(object obj) => false;
+
+    void M1(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is null or false
+            ? x.ToString() // 1
+            : x.ToString();
+    }
+
+    void M2(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is not (true or null)
+            ? x.ToString()
+            : x.ToString(); // 2
+    }
+}
+";
+            CreateCompilation(source).VerifyDiagnostics(
+                // (10,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(10, 15),
+                // (18,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(18, 15)
+                );
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.IsCondAccess_09"/>.</remarks>
+        [Fact]
+        public void IsCondAccess_09()
+        {
+            var source = @"
+#nullable enable
+class C
+{
+    bool M0(object obj) => false;
+
+    void M1(C? c, object? x)
+    {
+        _ = c?.M0(x = 0) is var z
+            ? x.ToString() // 1
+            : x.ToString(); // unreachable
+    }
+}
+";
+            CreateCompilation(source).VerifyDiagnostics(
+                // (10,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(10, 15)
+                );
+        }
+
+        [Fact]
+        public void IsCondAccess_10()
+        {
+            var source = @"
+#nullable enable
+class C
+{
+    object M0() => """";
+
+    void M1(C? c)
+    {
+        _ = c?.M0() is { } z
+            ? z.ToString()
+            : z.ToString(); // 1
+    }
+
+    void M2(C? c)
+    {
+        _ = c?.M0() is """" and { } z
+            ? z.ToString()
+            : z.ToString(); // 2
+    }
+
+    void M3(C? c)
+    {
+        _ = (string?)c?.M0() is 42 and { } z // 3
+            ? z.ToString()
+            : z.ToString(); // 4
+    }
+
+    void M4(C? c)
+    {
+        _ = c?.M0() is string z
+            ? z.ToString()
+            : z.ToString(); // 5
+    }
+}
+";
+            CreateCompilation(source).VerifyDiagnostics(
+                // (11,15): error CS0165: Use of unassigned local variable 'z'
+                //             : z.ToString(); // 1
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "z").WithArguments("z").WithLocation(11, 15),
+                // (18,15): error CS0165: Use of unassigned local variable 'z'
+                //             : z.ToString(); // 2
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "z").WithArguments("z").WithLocation(18, 15),
+                // (23,33): error CS0029: Cannot implicitly convert type 'int' to 'string'
+                //         _ = (string?)c?.M0() is 42 and { } z // 3
+                Diagnostic(ErrorCode.ERR_NoImplicitConv, "42").WithArguments("int", "string").WithLocation(23, 33),
+                // (25,15): error CS0165: Use of unassigned local variable 'z'
+                //             : z.ToString(); // 4
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "z").WithArguments("z").WithLocation(25, 15),
+                // (32,15): error CS0165: Use of unassigned local variable 'z'
+                //             : z.ToString(); // 5
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "z").WithArguments("z").WithLocation(32, 15)
+                );
+        }
+
+        [Theory]
+        [InlineData("[NotNullWhen(true)] out object? obj")]
+        [InlineData("[MaybeNullWhen(false)] out object obj")]
+        public void IsCondAccess_NotNullWhenTrue_01(string param)
+        {
+            var source = @"
+using System.Diagnostics.CodeAnalysis;
+
+class C
+{
+    bool M0(" + param + @") { obj = new object(); return true; }
+
+    static void M1(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) is true
+            ? obj.ToString()
+            : obj.ToString(); // 1
+    }
+
+    static void M2(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) is false
+            ? obj.ToString() // 2
+            : obj.ToString(); // 3
+    }
+
+    static void M3(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) is not true  // `is null or false`
+            ? obj.ToString() // 4
+            : obj.ToString(); // 5
+    }
+
+    static void M4(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) is not false  // `is null or true`
+            ? obj.ToString() // 6
+            : obj.ToString(); // 7
+    }
+
+    static void M5(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) is not (true or null)  // `is false`
+            ? obj.ToString() // 8
+            : obj.ToString(); // 9
+    }
+
+    static void M6(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) is not (false or null)  // `is true`
+            ? obj.ToString()
+            : obj.ToString(); // 10
+    }
+}
+";
+            var comp = CreateNullableCompilation(new[] { source, NotNullWhenAttributeDefinition, MaybeNullWhenAttributeDefinition });
+            comp.VerifyDiagnostics(
+                // (12,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(12, 15),
+                // (18,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(18, 15),
+                // (19,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(19, 15),
+                // (25,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(25, 15),
+                // (32,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 6
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(32, 15),
+                // (33,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 7
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(33, 15),
+                // (39,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 8
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(39, 15),
+                // (40,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 9
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(40, 15),
+                // (47,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 10
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(47, 15)
+                );
+        }
+
+        [Theory]
+        [InlineData("[NotNullWhen(true)] out object? obj")]
+        [InlineData("[MaybeNullWhen(false)] out object obj")]
+        public void IsCondAccess_NotNullWhenTrue_02(string param)
+        {
+            var source = @"
+using System.Diagnostics.CodeAnalysis;
+
+class C
+{
+    bool M0(" + param + @") { obj = new object(); return true; }
+
+    static void M1(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) is true and 1 // 1
+            ? obj.ToString() // 2
+            : obj.ToString(); // 3
+    }
+
+    static void M2(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) is true and var x
+            ? obj.ToString()
+            : obj.ToString(); // 4
+    }
+
+    static void M3(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) is _ and true
+            ? obj.ToString()
+            : obj.ToString(); // 5
+    }
+
+    static void M4(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) is true and bool b
+            ? obj.ToString()
+            : obj.ToString(); // 6
+    }
+
+    static void M5(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) is bool and true
+            ? obj.ToString()
+            : obj.ToString(); // 7
+    }
+
+    static void M6(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) is { } and true
+            ? obj.ToString()
+            : obj.ToString(); // 8
+    }
+}
+";
+            var comp = CreateNullableCompilation(new[] { source, NotNullWhenAttributeDefinition, MaybeNullWhenAttributeDefinition });
+            comp.VerifyDiagnostics(
+                // (10,40): error CS0029: Cannot implicitly convert type 'int' to 'bool'
+                //         _ = c?.M0(out obj) is true and 1 // 1
+                Diagnostic(ErrorCode.ERR_NoImplicitConv, "1").WithArguments("int", "bool").WithLocation(10, 40),
+                // (11,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(11, 15),
+                // (12,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(12, 15),
+                // (19,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(19, 15),
+                // (26,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 5
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(26, 15),
+                // (33,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 6
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(33, 15),
+                // (40,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 7
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(40, 15),
+                // (47,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 8
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(47, 15)
+                );
+        }
+
+        [Theory]
+        [InlineData("[NotNullWhen(true)] out object? obj")]
+        [InlineData("[MaybeNullWhen(false)] out object obj")]
+        public void IsCondAccess_NotNullWhenTrue_03(string param)
+        {
+            var source = @"
+using System.Diagnostics.CodeAnalysis;
+
+class C
+{
+    bool M0(" + param + @") { obj = new object(); return true; }
+
+    static void M1(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) is true or 1 // 1
+            ? obj.ToString() // 2
+            : obj.ToString(); // 3
+    }
+
+    static void M2(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) is true or var x // 4, 5
+            ? obj.ToString() // 6
+            : obj.ToString(); // unreachable
+    }
+
+    static void M3(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) is _ or true // 7
+            ? obj.ToString() // 8
+            : obj.ToString(); // unreachable
+    }
+
+    static void M4(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) is true or bool b // 9
+            ? obj.ToString() // 10
+            : obj.ToString(); // 11
+    }
+
+    static void M5(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) is bool or true
+            ? obj.ToString() // 12
+            : obj.ToString(); // 13
+    }
+
+    static void M6(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) is { } or true
+            ? obj.ToString() // 14
+            : obj.ToString(); // 15
+    }
+
+    static void M7(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) is true or false
+            ? obj.ToString() // 16
+            : obj.ToString(); // 17
+    }
+
+    static void M8(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) is null
+            ? obj.ToString() // 18
+            : obj.ToString(); // 19
+    }
+}
+";
+            var comp = CreateNullableCompilation(new[] { source, NotNullWhenAttributeDefinition, MaybeNullWhenAttributeDefinition });
+            comp.VerifyDiagnostics(
+                // (10,39): error CS0029: Cannot implicitly convert type 'int' to 'bool?'
+                //         _ = c?.M0(out obj) is true or 1 // 1
+                Diagnostic(ErrorCode.ERR_NoImplicitConv, "1").WithArguments("int", "bool?").WithLocation(10, 39),
+                // (11,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(11, 15),
+                // (12,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(12, 15),
+                // (17,13): warning CS8794: An expression of type 'bool?' always matches the provided pattern.
+                //         _ = c?.M0(out obj) is true or var x // 4, 5
+                Diagnostic(ErrorCode.WRN_IsPatternAlways, "c?.M0(out obj) is true or var x").WithArguments("bool?").WithLocation(17, 13),
+                // (17,43): error CS8780: A variable may not be declared within a 'not' or 'or' pattern.
+                //         _ = c?.M0(out obj) is true or var x // 4, 5
+                Diagnostic(ErrorCode.ERR_DesignatorBeneathPatternCombinator, "x").WithLocation(17, 43),
+                // (18,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 6
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(18, 15),
+                // (24,13): warning CS8794: An expression of type 'bool?' always matches the provided pattern.
+                //         _ = c?.M0(out obj) is _ or true // 7
+                Diagnostic(ErrorCode.WRN_IsPatternAlways, "c?.M0(out obj) is _ or true").WithArguments("bool?").WithLocation(24, 13),
+                // (25,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 8
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(25, 15),
+                // (31,44): error CS8780: A variable may not be declared within a 'not' or 'or' pattern.
+                //         _ = c?.M0(out obj) is true or bool b // 9
+                Diagnostic(ErrorCode.ERR_DesignatorBeneathPatternCombinator, "b").WithLocation(31, 44),
+                // (32,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 10
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(32, 15),
+                // (33,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 11
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(33, 15),
+                // (39,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 12
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(39, 15),
+                // (40,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 13
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(40, 15),
+                // (46,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 14
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(46, 15),
+                // (47,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 15
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(47, 15),
+                // (53,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 16
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(53, 15),
+                // (54,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 17
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(54, 15),
+                // (60,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 18
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(60, 15),
+                // (61,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 19
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(61, 15)
+                );
+        }
+
+        [Theory]
+        [InlineData("[NotNullWhen(false)] out object? obj")]
+        [InlineData("[MaybeNullWhen(true)] out object obj")]
+        public void IsCondAccess_NotNullWhenFalse(string param)
+        {
+            var source = @"
+using System.Diagnostics.CodeAnalysis;
+
+class C
+{
+    bool M0(" + param + @") { obj = new object(); return true; }
+
+    static void M1(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) is true
+            ? obj.ToString() // 1
+            : obj.ToString(); // 2
+    }
+
+    static void M2(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) is false
+            ? obj.ToString()
+            : obj.ToString(); // 3
+    }
+
+    static void M3(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) is not true  // `is null or false`
+            ? obj.ToString() // 4
+            : obj.ToString(); // 5
+    }
+
+    static void M4(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) is not false  // `is null or true`
+            ? obj.ToString() // 6
+            : obj.ToString();
+    }
+
+    static void M5(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) is not (true or null)  // `is false`
+            ? obj.ToString()
+            : obj.ToString(); // 7
+    }
+
+    static void M6(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) is not (false or null)  // `is true`
+            ? obj.ToString() // 8
+            : obj.ToString(); // 9
+    }
+}
+";
+            var comp = CreateNullableCompilation(new[] { source, NotNullWhenAttributeDefinition, MaybeNullWhenAttributeDefinition });
+            comp.VerifyDiagnostics(
+                // (11,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(11, 15),
+                // (12,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(12, 15),
+                // (19,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(19, 15),
+                // (25,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(25, 15),
+                // (26,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 5
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(26, 15),
+                // (32,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 6
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(32, 15),
+                // (40,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 7
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(40, 15),
+                // (46,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 8
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(46, 15),
+                // (47,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 9
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(47, 15)
+                );
+        }
+
+        [Fact]
+        public void IsPattern_LeftConditionalState()
+        {
+            var source = @"
+class C
+{
+    void M(object? obj)
+    {
+        _ = (obj != null) is true
+            ? obj.ToString()
+            : obj.ToString(); // 1
+    }
+}";
+            var comp = CreateNullableCompilation(source);
+            comp.VerifyDiagnostics(
+                // (8,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(8, 15));
+        }
+
+        [Fact, WorkItem(53308, "https://github.com/dotnet/roslyn/issues/53308")]
+        public void IsPattern_LeftCondAccess_PropertyPattern_01()
+        {
+            var source = @"
+class Program
+{
+    void M1(B? b)
+    {
+        if (b is { C: { Prop: { } } })
+        {
+            b.C.Prop.ToString();
+        }
+    }
+
+    void M2(B? b)
+    {
+        if (b?.C is { Prop: { } })
+        {
+            b.C.Prop.ToString(); // 1
+        }
+    }
+}
+
+class B
+{
+    public C? C { get; set; }
+}
+
+class C
+{
+    public string? Prop { get; set; }
+}";
+            // Ideally we would not issue diagnostic (1).
+            // However, additional work is needed in nullable pattern analysis to make this work.
+            var comp = CreateNullableCompilation(source);
+            comp.VerifyDiagnostics(
+                // (16,13): warning CS8602: Dereference of a possibly null reference.
+                //             b.C.Prop.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "b.C.Prop").WithLocation(16, 13));
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_LeftCondAccess"/>.</remarks>
+        [Fact]
+        public void EqualsCondAccess_LeftCondAccess()
+        {
+            var source = @"
+class C
+{
+    public C M0(object x) => this;
+
+    public void M1(C? c, object? x, object? y)
+    {
+        _ = (c?.M0(x = 1))?.M0(y = 1) != null
+            ? c.ToString() + x.ToString() + y.ToString()
+            : c.ToString() + x.ToString() + y.ToString(); // 1, 2, 3
+    }
+
+    public void M2(C? c, object? x, object? y, object? z)
+    {
+        _ = (c?.M0(x = 1)?.M0(y = 1))?.M0(z = 1) != null
+            ? c.ToString() + x.ToString() + y.ToString() + z.ToString()
+            : c.ToString() + x.ToString() + y.ToString() + z.ToString(); // 4, 5, 6, 7
+    }
+
+    public void M3(C? c, object? x, object? y)
+    {
+        _ = ((object?)c?.M0(x = 1))?.Equals(y = 1) != null
+            ? c.ToString() + x.ToString() + y.ToString()
+            : c.ToString() + x.ToString() + y.ToString(); // 8, 9, 10
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (10,15): warning CS8602: Dereference of a possibly null reference.
+                //             : c.ToString() + x.ToString() + y.ToString(); // 1, 2, 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "c").WithLocation(10, 15),
+                // (10,30): warning CS8602: Dereference of a possibly null reference.
+                //             : c.ToString() + x.ToString() + y.ToString(); // 1, 2, 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(10, 30),
+                // (10,45): warning CS8602: Dereference of a possibly null reference.
+                //             : c.ToString() + x.ToString() + y.ToString(); // 1, 2, 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "y").WithLocation(10, 45),
+                // (17,15): warning CS8602: Dereference of a possibly null reference.
+                //             : c.ToString() + x.ToString() + y.ToString() + z.ToString(); // 4, 5, 6, 7
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "c").WithLocation(17, 15),
+                // (17,30): warning CS8602: Dereference of a possibly null reference.
+                //             : c.ToString() + x.ToString() + y.ToString() + z.ToString(); // 4, 5, 6, 7
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(17, 30),
+                // (17,45): warning CS8602: Dereference of a possibly null reference.
+                //             : c.ToString() + x.ToString() + y.ToString() + z.ToString(); // 4, 5, 6, 7
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "y").WithLocation(17, 45),
+                // (17,60): warning CS8602: Dereference of a possibly null reference.
+                //             : c.ToString() + x.ToString() + y.ToString() + z.ToString(); // 4, 5, 6, 7
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "z").WithLocation(17, 60),
+                // (24,15): warning CS8602: Dereference of a possibly null reference.
+                //             : c.ToString() + x.ToString() + y.ToString(); // 8, 9, 10
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "c").WithLocation(24, 15),
+                // (24,30): warning CS8602: Dereference of a possibly null reference.
+                //             : c.ToString() + x.ToString() + y.ToString(); // 8, 9, 10
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(24, 30),
+                // (24,45): warning CS8602: Dereference of a possibly null reference.
+                //             : c.ToString() + x.ToString() + y.ToString(); // 8, 9, 10
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "y").WithLocation(24, 45)
+                );
+        }
+
+        [Fact]
+        public void ConditionalOperator_OperandConditionalState()
+        {
+            var source = @"
+class C
+{
+    void M1(object? x, bool b)
+    {
+        _ = (b ? x != null : x != null)
+            ? x.ToString()
+            : x.ToString(); // 1
+    }
+
+    void M2(object? x, bool b)
+    {
+        _ = (b ? x != null : x == null)
+            ? x.ToString() // 2
+            : x.ToString(); // 3
+    }
+
+    void M3(object? x, bool b)
+    {
+        _ = (b ? x == null : x != null)
+            ? x.ToString() // 4
+            : x.ToString(); // 5
+    }
+
+    void M4(object? x, bool b)
+    {
+        _ = (b ? x == null : x == null)
+            ? x.ToString() // 6
+            : x.ToString();
+    }
+}";
+            var comp = CreateNullableCompilation(source);
+            comp.VerifyDiagnostics(
+                // (8,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(8, 15),
+                // (14,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(14, 15),
+                // (15,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(15, 15),
+                // (21,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(21, 15),
+                // (22,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 5
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(22, 15),
+                // (28,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 6
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(28, 15));
+        }
+
+        [Fact]
+        public void ConditionalOperator_OperandUnreachable()
+        {
+            var source = @"
+class C
+{
+    void M1(object? x, bool b)
+    {
+        _ = (b ? x != null : throw null!)
+            ? x.ToString()
+            : x.ToString(); // 1
+    }
+
+    void M2(object? x, bool b)
+    {
+        _ = (b ? throw null! : x == null)
+            ? x.ToString() // 2
+            : x.ToString();
+    }
+}";
+            var comp = CreateNullableCompilation(source);
+            comp.VerifyDiagnostics(
+                // (8,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(8, 15),
+                // (14,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(14, 15)
+                );
+        }
+
+        [Fact]
+        public void NullCoalescing_RightSideBoolConstant()
+        {
+            var source = @"
+class C
+{
+    bool M0(out object obj) { obj = new object(); return false; }
+
+    static void M3(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) ?? false
+            ? obj.ToString()
+            : obj.ToString(); // 1
+    }
+
+    static void M4(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) ?? true
+            ? obj.ToString() // 2
+            : obj.ToString();
+    }
+}
+";
+            var comp = CreateNullableCompilation(new[] { source, NotNullWhenAttributeDefinition, MaybeNullWhenAttributeDefinition });
+            comp.VerifyDiagnostics(
+                // (10,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(10, 15),
+                // (16,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(16, 15)
+                );
+        }
+
+        [Fact]
+        public void NullCoalescing_RightSideNullTest()
+        {
+            var source = @"
+class C
+{
+    bool M0(out object obj) { obj = new object(); return false; }
+
+    static void M1(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) ?? obj != null
+            ? obj.ToString()
+            : obj.ToString(); // 1
+    }
+
+    static void M2(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) ?? obj == null
+            ? obj.ToString() // 2
+            : obj.ToString();
+    }
+
+    static void M5(C? c)
+    {
+        _ = c?.M0(out var obj) ?? obj != null // 3
+            ? obj.ToString()
+            : obj.ToString(); // 4
+    }
+
+    static void M6(C? c)
+    {
+        _ = c?.M0(out var obj) ?? obj == null // 5
+            ? obj.ToString() // 6
+            : obj.ToString();
+    }
+}
+";
+            var comp = CreateNullableCompilation(new[] { source, NotNullWhenAttributeDefinition, MaybeNullWhenAttributeDefinition });
+            comp.VerifyDiagnostics(
+                // (10,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(10, 15),
+                // (16,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(16, 15),
+                // (22,35): error CS0165: Use of unassigned local variable 'obj'
+                //         _ = c?.M0(out var obj) ?? obj != null // 3
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj").WithArguments("obj").WithLocation(22, 35),
+                // (24,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(24, 15),
+                // (29,35): error CS0165: Use of unassigned local variable 'obj'
+                //         _ = c?.M0(out var obj) ?? obj == null // 5
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj").WithArguments("obj").WithLocation(29, 35),
+                // (30,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 6
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(30, 15)
+                );
+        }
+
+        [Theory]
+        [InlineData("[NotNullWhen(true)] out object? obj")]
+        [InlineData("[MaybeNullWhen(false)] out object obj")]
+        public void NotNullWhenTrue_NullCoalescing_RightSideBool(string param)
+        {
+            var source = @"
+using System.Diagnostics.CodeAnalysis;
+
+class C
+{
+    bool M0(" + param + @") { obj = new object(); return true; }
+
+    static void M1(C? c)
+    {
+        _ = c?.M0(out var obj) ?? false
+            ? obj.ToString()
+            : obj.ToString(); // 1, 2
+    }
+
+    static void M2(C? c)
+    {
+        _ = c?.M0(out var obj) ?? true
+            ? obj.ToString() // 3, 4
+            : obj.ToString(); // 5
+    }
+
+    static void M3(C? c, bool b)
+    {
+        _ = c?.M0(out var obj1) ?? b
+            ? obj1.ToString() // 6, 7
+            : """";
+
+        _ = c?.M0(out var obj2) ?? b
+            ? """"
+            : obj2.ToString(); // 8, 9
+    }
+}
+";
+            var comp = CreateNullableCompilation(new[] { source, NotNullWhenAttributeDefinition, MaybeNullWhenAttributeDefinition });
+            comp.VerifyDiagnostics(
+                // (12,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 1, 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(12, 15),
+                // (12,15): error CS0165: Use of unassigned local variable 'obj'
+                //             : obj.ToString(); // 1, 2
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj").WithArguments("obj").WithLocation(12, 15),
+                // (18,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 3, 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(18, 15),
+                // (18,15): error CS0165: Use of unassigned local variable 'obj'
+                //             ? obj.ToString() // 3, 4
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj").WithArguments("obj").WithLocation(18, 15),
+                // (19,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 5
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(19, 15),
+                // (25,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj1.ToString() // 6, 7
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj1").WithLocation(25, 15),
+                // (25,15): error CS0165: Use of unassigned local variable 'obj1'
+                //             ? obj1.ToString() // 6, 7
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj1").WithArguments("obj1").WithLocation(25, 15),
+                // (30,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj2.ToString(); // 8, 9
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj2").WithLocation(30, 15),
+                // (30,15): error CS0165: Use of unassigned local variable 'obj2'
+                //             : obj2.ToString(); // 8, 9
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj2").WithArguments("obj2").WithLocation(30, 15)
+                );
+        }
+
+        [Theory]
+        [InlineData("[NotNullWhen(true)] out object? obj")]
+        [InlineData("[MaybeNullWhen(false)] out object obj")]
+        public void NotNullWhenTrue_NullCoalescing_RightSideNullTest(string param)
+        {
+            var source = @"
+using System.Diagnostics.CodeAnalysis;
+
+class C
+{
+    bool M0(" + param + @") { obj = new object(); return true; }
+
+    static void M1(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) ?? obj != null
+            ? obj.ToString()
+            : obj.ToString(); // 1
+    }
+
+    static void M2(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) ?? obj == null
+            ? obj.ToString() // 2
+            : obj.ToString(); // 3
+    }
+}
+";
+            var comp = CreateNullableCompilation(new[] { source, NotNullWhenAttributeDefinition, MaybeNullWhenAttributeDefinition });
+            comp.VerifyDiagnostics(
+                // (12,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(12, 15),
+                // (18,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(18, 15),
+                // (19,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(19, 15)
+                );
+        }
+
+        [Theory]
+        [InlineData("[NotNullWhen(false)] out object? obj")]
+        [InlineData("[MaybeNullWhen(true)] out object obj")]
+        public void NotNullWhenFalse_NullCoalescing_RightSideNullTest(string param)
+        {
+            var source = @"
+using System.Diagnostics.CodeAnalysis;
+
+class C
+{
+    bool M0(" + param + @") { obj = new object(); return true; }
+
+    static void M1(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) ?? obj != null
+            ? obj.ToString() // 1
+            : obj.ToString(); // 2
+    }
+
+    static void M2(C? c, object? obj)
+    {
+        _ = c?.M0(out obj) ?? obj == null
+            ? obj.ToString() // 3
+            : obj.ToString();
+    }
+}
+";
+            var comp = CreateNullableCompilation(new[] { source, NotNullWhenAttributeDefinition, MaybeNullWhenAttributeDefinition });
+            comp.VerifyDiagnostics(
+                // (11,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(11, 15),
+                // (12,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(12, 15),
+                // (18,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(18, 15)
+                );
+        }
+
+        [Theory]
+        [InlineData("[NotNullWhen(false)] out object? obj")]
+        [InlineData("[MaybeNullWhen(true)] out object obj")]
+        public void NotNullWhenFalse_NullCoalescing(string param)
+        {
+            var source = @"
+using System.Diagnostics.CodeAnalysis;
+
+class C
+{
+    bool M0(" + param + @") { obj = new object(); return false; }
+
+    static void M1(C? c)
+    {
+        _ = c?.M0(out var obj) ?? false
+            ? obj.ToString() // 1
+            : obj.ToString(); // 2, 3
+    }
+
+    static void M2(C? c)
+    {
+        _ = c?.M0(out var obj) ?? true
+            ? obj.ToString() // 4, 5
+            : obj.ToString();
+    }
+
+    static void M3(C? c, bool b)
+    {
+        _ = c?.M0(out var obj1) ?? b
+            ? obj1.ToString() // 6, 7
+            : """";
+
+        _ = c?.M0(out var obj2) ?? b
+            ? """"
+            : obj2.ToString(); // 8, 9
+    }
+}
+";
+            var comp = CreateNullableCompilation(new[] { source, NotNullWhenAttributeDefinition, MaybeNullWhenAttributeDefinition });
+            comp.VerifyDiagnostics(
+                // (11,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(11, 15),
+                // (12,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 2, 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(12, 15),
+                // (12,15): error CS0165: Use of unassigned local variable 'obj'
+                //             : obj.ToString(); // 2, 3
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj").WithArguments("obj").WithLocation(12, 15),
+                // (18,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 4, 5
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(18, 15),
+                // (18,15): error CS0165: Use of unassigned local variable 'obj'
+                //             ? obj.ToString() // 4, 5
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj").WithArguments("obj").WithLocation(18, 15),
+                // (25,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj1.ToString() // 6, 7
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj1").WithLocation(25, 15),
+                // (25,15): error CS0165: Use of unassigned local variable 'obj1'
+                //             ? obj1.ToString() // 6, 7
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj1").WithArguments("obj1").WithLocation(25, 15),
+                // (30,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj2.ToString(); // 8, 9
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj2").WithLocation(30, 15),
+                // (30,15): error CS0165: Use of unassigned local variable 'obj2'
+                //             : obj2.ToString(); // 8, 9
+                Diagnostic(ErrorCode.ERR_UseDefViolation, "obj2").WithArguments("obj2").WithLocation(30, 15)
+                );
+        }
+
+        [Fact]
+        [WorkItem(26624, "https://github.com/dotnet/roslyn/issues/26624")]
+        public void CondAccess_Multiple_Arguments()
+        {
+            var source = @"
+static class C
+{
+    static bool? M0(this bool b, object? obj) { return b; }
+
+    static void M1(bool? b, object? obj)
+    {
+        _ = b?.M0(obj = new object()) ?? false
+            ? obj.ToString()
+            : obj.ToString(); // 1
+    }
+
+    static void M2(bool? b)
+    {
+        var obj = new object();
+        _ = b?.M0(obj = null)?.M0(obj = new object()) ?? false
+            ? obj.ToString()
+            : obj.ToString(); // 2
+    }
+
+    static void M3(bool? b)
+    {
+        var obj = new object();
+        _ = b?.M0(obj = new object())?.M0(obj = null) ?? false
+            ? obj.ToString() // 3
+            : obj.ToString(); // 4
+    }
+}
+";
+            var comp = CreateNullableCompilation(new[] { source, NotNullWhenAttributeDefinition });
+            comp.VerifyDiagnostics(
+                // (10,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(10, 15),
+                // (18,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(18, 15),
+                // (25,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? obj.ToString() // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(25, 15),
+                // (26,15): warning CS8602: Dereference of a possibly null reference.
+                //             : obj.ToString(); // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "obj").WithLocation(26, 15)
+                );
+        }
+
+        [Fact]
+        [WorkItem(26624, "https://github.com/dotnet/roslyn/issues/26624")]
+        public void NullCoalescing_LeftStateAfterExpression()
+        {
+            var source = @"
+class C
+{
+    static void M1(bool? flag)
+    {
+        _ = flag ?? false
+            ? flag.Value
+            : flag.Value; // 1
+    }
+}
+";
+            var comp = CreateNullableCompilation(new[] { source, NotNullWhenAttributeDefinition });
+            comp.VerifyDiagnostics(
+                // (8,15): warning CS8629: Nullable value type may be null.
+                //             : flag.Value; // 1
+                Diagnostic(ErrorCode.WRN_NullableValueTypeMayBeNull, "flag").WithLocation(8, 15)
+                );
+        }
+
+        ///<remarks>Ported from <see cref="FlowTests.CondAccess_NullCoalescing_01"/>.</remarks>
+        [Fact]
+        public void CondAccess_NullCoalescing_01()
+        {
+            var source = @"
+class C
+{
+    void M1(C c, object? x)
+    {
+        _ = c?.M(x = new object()) ?? true
+            ? x.ToString() // 1
+            : x.ToString();
+    }
+
+    void M2(C c, object? x)
+    {
+        _ = c?.M(x = new object()) ?? false
+            ? x.ToString()
+            : x.ToString(); // 2;
+    }
+
+    bool M(object x) => true;
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (7,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(7, 15),
+                // (15,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 2;
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(15, 15)
+                );
+        }
+
+        ///<remarks>Ported from <see cref="FlowTests.CondAccess_NullCoalescing_02"/>.</remarks>
+        [Fact]
+        public void CondAccess_NullCoalescing_02()
+        {
+            var source = @"
+class C
+{
+    void M1(C c1, C c2, object? x)
+    {
+        _ = c1?.M(x = new object()) ?? c2?.M(x = new object()) ?? true
+            ? x.ToString() // 1
+            : x.ToString();
+    }
+
+    void M2(C c1, C c2, object? x)
+    {
+        _ = c1?.M(x = new object()) ?? c2?.M(x = new object()) ?? false
+            ? x.ToString()
+            : x.ToString(); // 2;
+    }
+
+    bool M(object x) => true;
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (7,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(7, 15),
+                // (15,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 2;
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(15, 15)
+                );
+        }
+
+        ///<remarks>Ported from <see cref="FlowTests.CondAccess_NullCoalescing_03"/>.</remarks>
+        [Fact]
+        public void CondAccess_NullCoalescing_03()
+        {
+            var source = @"
+class C
+{
+    void M1(C c1, object? x)
+    {
+        _ = c1?.MA().MB(x = new object()) ?? false
+            ? x.ToString()
+            : x.ToString(); // 1
+    }
+
+    void M2(C c1, object? x)
+    {
+        _ = c1?.MA()?.MB(x = new object()) ?? false
+            ? x.ToString()
+            : x.ToString(); // 2;
+    }
+
+    C MA() => this;
+    bool MB(object x) => true;
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (8,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(8, 15),
+                // (15,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 2;
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(15, 15)
+                );
+        }
+
+        ///<remarks>Ported from <see cref="FlowTests.CondAccess_NullCoalescing_04"/>.</remarks>
+        [Fact]
+        public void CondAccess_NullCoalescing_04()
+        {
+            var source = @"
+class C
+{
+    void M1(C c1, object? x)
+    {
+        _ = c1?.MA(x = new object()).MB() ?? false
+            ? x.ToString()
+            : x.ToString(); // 1
+    }
+
+    void M2(C c1, object? x)
+    {
+        _ = c1?.MA(x = new object())?.MB() ?? false
+            ? x.ToString()
+            : x.ToString(); // 2;
+    }
+
+    C MA(object x) => this;
+    bool MB() => true;
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (8,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(8, 15),
+                // (15,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 2;
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(15, 15)
+                );
+        }
+
+        ///<remarks>Ported from <see cref="FlowTests.CondAccess_NullCoalescing_05"/>.</remarks>
+        [Fact]
+        public void CondAccess_NullCoalescing_05()
+        {
+            var source = @"
+class C
+{
+    void M1(C c1, object? x)
+    {
+        _ = c1?.MA(c1.MB(x = new object())) ?? false
+            ? x.ToString()
+            : x.ToString(); // 1
+    }
+
+    void M2(C c1, object? x)
+    {
+        _ = c1?.MA(c1?.MB(x = new object())) ?? false
+            ? x.ToString() // 2
+            : x.ToString(); // 3
+    }
+
+    bool MA(object? obj) => true;
+    C MB(object x) => this;
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (8,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(8, 15),
+                // (14,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(14, 15),
+                // (15,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(15, 15)
+                );
+        }
+
+        ///<remarks>Ported from <see cref="FlowTests.CondAccess_NullCoalescing_06"/>.</remarks>
+        [Fact]
+        public void CondAccess_NullCoalescing_06()
+        {
+            var source = @"
+class C
+{
+    void M1(C c1, object? x)
+    {
+        _ = c1?.M(out x) ?? false
+            ? x.ToString()
+            : x.ToString(); // 1
+    }
+
+    void M2(C c1, object? x)
+    {
+        _ = c1?.M(out x) ?? false
+            ? x.ToString()
+            : x.ToString(); // 2
+    }
+
+    bool M(out object obj) { obj = new object(); return true; }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (8,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(8, 15),
+                // (15,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(15, 15)
+                );
+        }
+
+        ///<remarks>Ported from <see cref="FlowTests.CondAccess_NullCoalescing_07"/>.</remarks>
+        [Fact]
+        public void CondAccess_NullCoalescing_07()
+        {
+            var source = @"
+class C
+{
+    void M1(bool b, C c1, object? x)
+    {
+        _ = c1?.M(x = new object()) ?? b
+            ? x.ToString() // 1
+            : x.ToString(); // 2
+    }
+
+    bool M(object obj) { return true; }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (7,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(7, 15),
+                // (8,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(8, 15)
+                );
+        }
+
+        ///<remarks>Ported from <see cref="FlowTests.CondAccess_NullCoalescing_08"/>.</remarks>
+        [Fact]
+        public void CondAccess_NullCoalescing_08()
+        {
+            var source = @"
+class C
+{
+    void M1(C c1, object? x)
+    {
+        _ = (c1?.M(x = 0)) ?? false
+            ? x.ToString()
+            : x.ToString(); // 1
+    }
+
+    void M2(C c1, object? x)
+    {
+        _ = c1?.M(x = 0)! ?? false
+            ? x.ToString()
+            : x.ToString(); // 2
+    }
+
+    void M3(C c1, object? x)
+    {
+        _ = (c1?.M(x = 0))! ?? false
+            ? x.ToString()
+            : x.ToString(); // 3
+    }
+
+    bool M(object obj) { return true; }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (8,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(8, 15),
+                // (15,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(15, 15),
+                // (22,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(22, 15)
+                );
+        }
+
+        ///<remarks>Ported from <see cref="FlowTests.CondAccess_NullCoalescing_09"/>.</remarks>
+        [Fact]
+        public void CondAccess_NullCoalescing_09()
+        {
+            var source = @"
+class C
+{
+
+    void M1(C c1, object? x)
+    {
+        _ = (c1?[x = 0]) ?? false
+            ? x.ToString()
+            : x.ToString(); // 1
+    }
+
+    void M2(C c1, object? x)
+    {
+        _ = (c1?[x = 0]) ?? true
+            ? x.ToString() // 2
+            : x.ToString();
+    }
+
+    public bool this[object x] => false;
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (9,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(9, 15),
+                // (15,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(15, 15)
+                );
+        }
+
+        ///<remarks>Ported from <see cref="FlowTests.CondAccess_NullCoalescing_10"/>.</remarks>
+        [Fact]
+        public void CondAccess_NullCoalescing_10()
+        {
+            var source = @"
+class C
+{
+
+    void M1(C c1, object? x)
+    {
+        _ = (bool?)null ?? (c1?.M(x = 0) ?? false)
+            ? x.ToString()
+            : x.ToString(); // 1
+    }
+
+    void M2(C c1, object? x)
+    {
+        _ = (bool?)null ?? (c1?.M(x = 0) ?? true)
+            ? x.ToString() // 2
+            : x.ToString();
+    }
+
+    bool M(object obj) { return true; }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (9,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(9, 15),
+                // (15,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(15, 15));
+        }
+
+        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_ConditionalLeft"/>.</remarks>
+        [Fact]
+        public void NullCoalescing_ConditionalLeft()
+        {
+            var source = @"
+class C
+{
+    void M1(C c1, bool b, object? x)
+    {
+        _ = (bool?)(b && c1.M(x = 0)) ?? false
+            ? x.ToString() // 1
+            : x.ToString(); // 2
+    }
+
+    void M2(C c1, bool b, object? x)
+    {
+        _ = (bool?)c1.M(x = 0) ?? false
+            ? x.ToString()
+            : x.ToString();
+    }
+
+    void M3(C c1, bool b, object? x, object? y)
+    {
+        _ = (bool?)((y = 0) is 0 && c1.M(x = 0)) ?? false
+            ? x.ToString() + y.ToString() // 3
+            : x.ToString() + y.ToString(); // 4
+    }
+
+    bool M(object obj) { return true; }
+}
+";
+            // Note that we unsplit any conditional state after visiting the left side of `??`.
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (7,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(7, 15),
+                // (8,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(8, 15),
+                // (21,15): warning CS8602: Dereference of a possibly null reference.
+                //             ? x.ToString() + y.ToString() // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(21, 15),
+                // (22,15): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString() + y.ToString(); // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(22, 15)
+                );
+        }
+
+        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_Throw"/>.</remarks>
+        [Fact]
+        public void NullCoalescing_CondAccess_Throw()
+        {
+            var source = @"
+class C
+{
+    void M1(C c1, bool b, object? x)
+    {
+        _ = c1?.M(x = 0) ?? throw new System.Exception();
+        x.ToString();
+    }
+
+    bool M(object obj) { return true; }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics();
+        }
+
+        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_Cast"/>.</remarks>
+        [Fact]
+        public void NullCoalescing_CondAccess_Cast()
+        {
+            var source = @"
+class C
+{
+    void M1(C c1, bool b, object? x)
+    {
+        _ = (object)c1?.M(x = 0) ?? throw new System.Exception(); // 1
+        x.ToString();
+    }
+
+    C M(object obj) { return this; }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (6,13): warning CS8600: Converting null literal or possible null value to non-nullable type.
+                //         _ = (object)c1?.M(x = 0) ?? throw new System.Exception(); // 1
+                Diagnostic(ErrorCode.WRN_ConvertingNullableToNonNullable, "(object)c1?.M(x = 0)").WithLocation(6, 13));
+        }
+
+        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_01"/>.</remarks>
+        [Fact]
+        public void NullCoalescing_CondAccess_UserDefinedConv_01()
+        {
+            var source = @"
+struct S { }
+
+struct C
+{
+    public static implicit operator S(C? c)
+    {
+        return default(S);
+    }
+
+    void M1(C? c1, object? x)
+    {
+        S s = c1?.M2(x = 0) ?? c1!.Value.M3(x = 0);
+        x.ToString();
+    }
+
+    C M2(object obj) { return this; }
+    S M3(object obj) { return this; }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics();
+        }
+
+        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_02"/>.</remarks>
+        [Fact]
+        public void NullCoalescing_CondAccess_UserDefinedConv_02()
+        {
+            var source = @"
+class B { }
+class C
+{
+    public static implicit operator B(C c) => new B();
+
+    void M1(C c1, object? x)
+    {
+        B b = c1?.M1(x = 0) ?? c1!.M2(x = 0);
+        x.ToString();
+    }
+
+    C M1(object obj) { return this; }
+    B M2(object obj) { return new B(); }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics();
+        }
+
+        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_03"/>.</remarks>
+        [Fact]
+        public void NullCoalescing_CondAccess_UserDefinedConv_03()
+        {
+            var source = @"
+struct B { }
+struct C
+{
+    public static implicit operator B(C c) => new B();
+
+    void M1(C? c1, object? x)
+    {
+        B b = c1?.M1(x = 0) ?? c1!.Value.M2(x = 0);
+        x.ToString();
+    }
+
+    C M1(object obj) { return this; }
+    B M2(object obj) { return new B(); }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics();
+        }
+
+        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_04"/>.</remarks>
+        [Fact]
+        public void NullCoalescing_CondAccess_UserDefinedConv_04()
+        {
+            var source = @"
+struct B { }
+struct C
+{
+    public static implicit operator B?(C c) => null;
+
+    void M1(C? c1, object? x)
+    {
+        B? b = c1?.M1(x = 0) ?? c1!.Value.M2(x = 0);
+        x.ToString();
+    }
+
+    C M1(object obj) { return this; }
+    B? M2(object obj) { return new B(); }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics();
+        }
+
+        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_05"/>.</remarks>
+        [Fact]
+        public void NullCoalescing_CondAccess_UserDefinedConv_05()
+        {
+            var source = @"
+struct B
+{
+    public static implicit operator B(C c) => default;
+}
+
+class C
+{
+    static void M1(C c1, object? x)
+    {
+        B b = c1?.M1(x = 0) ?? c1!.M2(x = 0);
+        x.ToString();
+    }
+
+    C M1(object obj) { return this; }
+    B M2(object obj) { return this; }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics();
+        }
+
+        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_01"/>.</remarks>
+        [Theory]
+        [InlineData("explicit")]
+        [InlineData("implicit")]
+        public void NullCoalescing_CondAccess_ExplicitUserDefinedConv_01_01(string conversionKind)
+        {
+            var source = @"
+struct S { }
+
+struct C
+{
+    public static " + conversionKind + @" operator S(C? c)
+    {
+        return default(S);
+    }
+
+    void M1(C? c1, object? x)
+    {
+        S s = (S?)c1?.M2(x = 0) ?? c1!.Value.M3(x = 0);
+        x.ToString(); // 1
+    }
+
+    C M2(object obj) { return this; }
+    S M3(object obj) { return (S)this; }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (14,9): warning CS8602: Dereference of a possibly null reference.
+                //         x.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(14, 9)
+                );
+        }
+
+        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_01"/>.</remarks>
+        [Theory]
+        [InlineData("explicit")]
+        [InlineData("implicit")]
+        public void NullCoalescing_CondAccess_ExplicitUserDefinedConv_01_02(string conversionKind)
+        {
+            var source = @"
+using System.Diagnostics.CodeAnalysis;
+
+struct S { }
+
+struct C
+{
+    public static " + conversionKind + @" operator S([DisallowNull] C? c)
+    {
+        return default(S);
+    }
+
+    void M1(C? c1, object? x)
+    {
+        S s = (S?)c1?.M2(x = 0) ?? c1!.Value.M3(x = 0); // 1
+        x.ToString(); // 2
+    }
+
+    C M2(object obj) { return this; }
+    S M3(object obj) { return (S)this; }
+}
+";
+            CreateNullableCompilation(new[] { source, DisallowNullAttributeDefinition }).VerifyDiagnostics(
+                // (15,19): warning CS8607: A possible null value may not be used for a type marked with [NotNull] or [DisallowNull]
+                //         S s = (S?)c1?.M2(x = 0) ?? c1!.Value.M3(x = 0); // 1
+                Diagnostic(ErrorCode.WRN_DisallowNullAttributeForbidsMaybeNullAssignment, "c1?.M2(x = 0)").WithLocation(15, 19),
+                // (16,9): warning CS8602: Dereference of a possibly null reference.
+                //         x.ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(16, 9)
+                );
+        }
+
+        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_02"/>.</remarks>
+        [Theory]
+        [InlineData("explicit")]
+        [InlineData("implicit")]
+        public void NullCoalescing_CondAccess_ExplicitUserDefinedConv_02_01(string conversionKind)
+        {
+            var source = @"
+class B { }
+class C
+{
+    public static " + conversionKind + @" operator B(C? c) => new B();
+
+    void M1(C c1, object? x)
+    {
+        B b = (B)c1?.M1(x = 0) ?? c1!.M2(x = 0);
+        x.ToString(); // 1
+    }
+
+    C M1(object obj) { return this; }
+    B M2(object obj) { return new B(); }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (10,9): warning CS8602: Dereference of a possibly null reference.
+                //         x.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(10, 9));
+        }
+
+        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_02"/>.</remarks>
+        [Theory]
+        [InlineData("explicit")]
+        [InlineData("implicit")]
+        public void NullCoalescing_CondAccess_ExplicitUserDefinedConv_02_02(string conversionKind)
+        {
+            var source = @"
+class B { }
+class C
+{
+    public static " + conversionKind + @" operator B?(C? c) => new B();
+
+    void M1(C c1, object? x)
+    {
+        B b = (B?)c1?.M1(x = 0) ?? c1!.M2(x = 0);
+        x.ToString(); // 1
+    }
+
+    C M1(object obj) { return this; }
+    B M2(object obj) { return new B(); }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (10,9): warning CS8602: Dereference of a possibly null reference.
+                //         x.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(10, 9));
+        }
+
+        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_02"/>.</remarks>
+        [Theory]
+        [InlineData("explicit")]
+        [InlineData("implicit")]
+        public void NullCoalescing_CondAccess_ExplicitUserDefinedConv_02_03(string conversionKind)
+        {
+            var source = @"
+using System.Diagnostics.CodeAnalysis;
+
+class B { }
+class C
+{
+    [return: NotNullIfNotNull(""c"")]
+    public static " + conversionKind + @" operator B?(C? c) => new B();
+
+    void M1(C c1, object? x)
+    {
+        B b = (B?)c1?.M1(x = 0) ?? c1!.M2(x = 0);
+        x.ToString(); // 1
+    }
+
+    C M1(object obj) { return this; }
+    B M2(object obj) { return new B(); }
+}
+";
+            CreateNullableCompilation(new[] { source, NotNullIfNotNullAttributeDefinition }).VerifyDiagnostics(
+                // (13,9): warning CS8602: Dereference of a possibly null reference.
+                //         x.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(13, 9));
+        }
+
+        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_02"/>.</remarks>
+        [Theory]
+        [InlineData("explicit")]
+        [InlineData("implicit")]
+        public void NullCoalescing_CondAccess_ExplicitUserDefinedConv_02_04(string conversionKind)
+        {
+            var source = @"
+using System.Diagnostics.CodeAnalysis;
+
+class B { }
+class C
+{
+    [return: NotNull]
+    public static " + conversionKind + @" operator B?(C? c) => new B();
+
+    void M1(C c1, object? x)
+    {
+        B b = (B?)c1?.M1(x = 0) ?? c1!.M2(x = 0);
+        x.ToString(); // 1
+    }
+
+    C M1(object obj) { return this; }
+    B M2(object obj) { return new B(); }
+}
+";
+            CreateNullableCompilation(new[] { source, NotNullAttributeDefinition }).VerifyDiagnostics(
+                // (13,9): warning CS8602: Dereference of a possibly null reference.
+                //         x.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(13, 9));
+        }
+
+        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_02"/>.</remarks>
+        [Theory]
+        [InlineData("explicit")]
+        [InlineData("implicit")]
+        public void NullCoalescing_CondAccess_ExplicitUserDefinedConv_02_05(string conversionKind)
+        {
+            var source = @"
+class B { }
+class C
+{
+    public static " + conversionKind + @" operator B(C c) => new B();
+
+    void M1(C c1, object? x)
+    {
+        B b = (B?)c1?.M1(x = 0) ?? c1!.M2(x = 0); // 1
+        x.ToString(); // 2
+    }
+
+    C M1(object obj) { return this; }
+    B M2(object obj) { return new B(); }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (9,19): warning CS8604: Possible null reference argument for parameter 'c' in 'C.implicit operator B(C c)'.
+                //         B b = (B?)c1?.M1(x = 0) ?? c1!.M2(x = 0); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceArgument, "c1?.M1(x = 0)").WithArguments("c", "C." + conversionKind + " operator B(C c)").WithLocation(9, 19),
+                // (10,9): warning CS8602: Dereference of a possibly null reference.
+                //         x.ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(10, 9)
+                );
+        }
+
+        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_03"/>.</remarks>
+        [Theory]
+        [InlineData("explicit")]
+        [InlineData("implicit")]
+        public void NullCoalescing_CondAccess_ExplicitUserDefinedConv_03(string conversionKind)
+        {
+            var source = @"
+struct B { }
+struct C
+{
+    public static " + conversionKind + @" operator B(C c) => new B();
+
+    void M1(C? c1, object? x)
+    {
+        B b = (B?)c1?.M1(x = 0) ?? c1!.Value.M2(x = 0);
+        x.ToString();
+    }
+
+    C M1(object obj) { return this; }
+    B M2(object obj) { return new B(); }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics();
+        }
+
+        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_04"/>.</remarks>
+        [Theory]
+        [InlineData("explicit")]
+        [InlineData("implicit")]
+        public void NullCoalescing_CondAccess_ExplicitUserDefinedConv_04(string conversionKind)
+        {
+            var source = @"
+struct B { }
+struct C
+{
+    public static " + conversionKind + @" operator B?(C c) => null;
+
+    void M1(C? c1, object? x)
+    {
+        B? b = (B?)c1?.M1(x = 0) ?? c1!.Value.M2(x = 0);
+        x.ToString();
+    }
+
+    C M1(object obj) { return this; }
+    B? M2(object obj) { return new B(); }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics();
+        }
+
+        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_05"/>.</remarks>
+        [Theory]
+        [InlineData("explicit")]
+        [InlineData("implicit")]
+        public void NullCoalescing_CondAccess_ExplicitUserDefinedConv_05_01(string conversionKind)
+        {
+            var source = @"
+struct B
+{
+    public static " + conversionKind + @" operator B(C? c) => default;
+}
+
+class C
+{
+    static void M1(C c1, object? x)
+    {
+        B b = (B?)c1?.M1(x = 0) ?? c1!.M2(x = 0);
+        x.ToString(); // 1
+    }
+
+    C M1(object obj) { return this; }
+    B M2(object obj) { return default; }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (12,9): warning CS8602: Dereference of a possibly null reference.
+                //         x.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(12, 9)
+                );
+        }
+
+        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_05"/>.</remarks>
+        [Theory]
+        [InlineData("explicit")]
+        [InlineData("implicit")]
+        public void NullCoalescing_CondAccess_ExplicitUserDefinedConv_05_02(string conversionKind)
+        {
+            var source = @"
+using System.Diagnostics.CodeAnalysis;
+
+struct B
+{
+    public static " + conversionKind + @" operator B([DisallowNull] C? c) => default;
+}
+
+class C
+{
+    static void M1(C c1, object? x)
+    {
+        B b = (B?)c1?.M1(x = 0) ?? c1!.M2(x = 0); // 1
+        x.ToString(); // 2
+    }
+
+    C M1(object obj) { return this; }
+    B M2(object obj) { return default; }
+}
+";
+            CreateNullableCompilation(new[] { source, DisallowNullAttributeDefinition }).VerifyDiagnostics(
+                // (13,19): warning CS8604: Possible null reference argument for parameter 'c' in 'B.implicit operator B(C? c)'.
+                //         B b = (B?)c1?.M1(x = 0) ?? c1!.M2(x = 0); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceArgument, "c1?.M1(x = 0)").WithArguments("c", "B." + conversionKind + " operator B(C? c)").WithLocation(13, 19),
+                // (14,9): warning CS8602: Dereference of a possibly null reference.
+                //         x.ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(14, 9)
+                );
+        }
+
+        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_NullableEnum"/>.</remarks>
+        [Fact]
+        public void NullCoalescing_CondAccess_NullableEnum()
+        {
+            var source = @"
+public enum E { E1 = 1 }
+
+public static class Extensions
+{
+    public static E M1(this E e, object obj) => e;
+
+    static void M2(E? e, object? x)
+    {
+        E e2 = e?.M1(x = 0) ?? e!.Value.M1(x = 0);
+        x.ToString();
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics();
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_NonNullConstantLeft"/>.</remarks>
+        [Fact]
+        public void NullCoalescing_CondAccess_NonNullConstantLeft()
+        {
+            var source = @"
+static class C
+{
+    static string M0(this string s, object? x) => s;
+
+    static void M1(object? x)
+    {
+        _ = """"?.Equals(x = new object()) ?? false
+            ? x.ToString()
+            : x.ToString();
+    }
+
+    static void M2(object? x, object? y)
+    {
+        _ = """"?.M0(x = new object())?.Equals(y = new object()) ?? false
+            ? x.ToString() + y.ToString()
+            : x.ToString() + y.ToString(); // 1
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (17,30): warning CS8602: Dereference of a possibly null reference.
+                //             : x.ToString() + y.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "y").WithLocation(17, 30));
+        }
+
+        /// <remarks>Ported from <see cref="FlowTests.NullCoalescing_NonNullConstantLeft"/>.</remarks>
+        [Fact]
+        public void NullCoalescing_NonNullConstantLeft()
+        {
+            var source = @"
+static class C
+{
+    static void M1(object? x)
+    {
+        _ = """" ?? $""{x.ToString()}""; // unreachable
+        _ = """".ToString() ?? $""{x.ToString()}""; // 1
+    }
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (7,33): warning CS8602: Dereference of a possibly null reference.
+                //         _ = "".ToString() ?? $"{x.ToString()}"; // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(7, 33)
+                );
+        }
+
+        [Fact]
+        public void NullCoalescing_CondAccess_NullableClassConstraint()
+        {
+            var source = @"
+interface I
+{
+    bool M0(object obj);
+}
+
+static class C<T> where T : class?, I
+{
+    static void M1(T t, object? x)
+    {
+        _ = t?.M0(x = 1) ?? false
+            ? t.ToString() + x.ToString()
+            : t.ToString() + x.ToString(); // 1, 2
+    }
+
+    static void M2(T t, object? x)
+    {
+        _ = t?.M0(x = 1) ?? false
+            ? M2(t) + x.ToString()
+            : M2(t) + x.ToString(); // 3, 4
+    }
+
+    // 'T' is allowed as an argument with a maybe-null state, but not with a maybe-default state.
+    static string M2(T t) => t!.ToString();
+}
+";
+            CreateNullableCompilation(source).VerifyDiagnostics(
+                // (13,15): warning CS8602: Dereference of a possibly null reference.
+                //             : t.ToString() + x.ToString(); // 1, 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "t").WithLocation(13, 15),
+                // (13,30): warning CS8602: Dereference of a possibly null reference.
+                //             : t.ToString() + x.ToString(); // 1, 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(13, 30),
+                // (20,18): warning CS8604: Possible null reference argument for parameter 't' in 'string C<T>.M2(T t)'.
+                //             : M2(t) + x.ToString(); // 3, 4
+                Diagnostic(ErrorCode.WRN_NullReferenceArgument, "t").WithArguments("t", "string C<T>.M2(T t)").WithLocation(20, 18),
+                // (20,23): warning CS8602: Dereference of a possibly null reference.
+                //             : M2(t) + x.ToString(); // 3, 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(20, 23)
+                );
+        }
+
         [Fact]
         public void ConditionalBranching_Is_ReferenceType()
         {
@@ -60536,7 +64951,7 @@ public class C {
     }
 
     public Func<T, T> M5<T>() {
-        return Helper.Method1<T?>;
+        return Helper.Method1<T?>; // 2
     }
 
     public Func<T, T?> M6<T>() {
@@ -60544,7 +64959,7 @@ public class C {
     }
 
     public Func<T?, T> M7<T>() {
-        return Helper.Method1<T?>; // 2
+        return Helper.Method1<T?>; // 3
     }
 
     public Func<T?, T?> M8<T>() {
@@ -60563,8 +64978,11 @@ static class Helper
                 // (15,16): warning CS8621: Nullability of reference types in return type of 'string? Helper.Method1<string?>(string? t)' doesn't match the target delegate 'Func<string?, string>' (possibly because of nullability attributes).
                 //         return Helper.Method1<string?>; // 1
                 Diagnostic(ErrorCode.WRN_NullabilityMismatchInReturnTypeOfTargetDelegate, "Helper.Method1<string?>").WithArguments("string? Helper.Method1<string?>(string? t)", "System.Func<string?, string>").WithLocation(15, 16),
-                // (31,16): warning CS8621: Nullability of reference types in return type of 'T? Helper.Method1<T?>(T? t)' doesn't match the target delegate 'Func<T?, T>' (possibly because of nullability attributes).
+                // (23,16): warning CS8621: Nullability of reference types in return type of 'T? Helper.Method1<T?>(T? t)' doesn't match the target delegate 'Func<T, T>' (possibly because of nullability attributes).
                 //         return Helper.Method1<T?>; // 2
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInReturnTypeOfTargetDelegate, "Helper.Method1<T?>").WithArguments("T? Helper.Method1<T?>(T? t)", "System.Func<T, T>").WithLocation(23, 16),
+                // (31,16): warning CS8621: Nullability of reference types in return type of 'T? Helper.Method1<T?>(T? t)' doesn't match the target delegate 'Func<T?, T>' (possibly because of nullability attributes).
+                //         return Helper.Method1<T?>; // 3
                 Diagnostic(ErrorCode.WRN_NullabilityMismatchInReturnTypeOfTargetDelegate, "Helper.Method1<T?>").WithArguments("T? Helper.Method1<T?>(T? t)", "System.Func<T?, T>").WithLocation(31, 16)
                 );
         }
@@ -60669,6 +65087,107 @@ static class Helper
                 //         return Helper.Method1; // 1
                 Diagnostic(ErrorCode.WRN_NullabilityMismatchInReturnTypeOfTargetDelegate, "Helper.Method1").WithArguments("string? Helper.Method1(string? x, string? y)", "System.Func<string?, string?, string>").WithLocation(23, 16)
                 );
+        }
+
+        [Fact]
+        [WorkItem(49865, "https://github.com/dotnet/roslyn/issues/49865")]
+        public void DelegateCreation_FromMethodGroup_NotNullIfNotNull_06()
+        {
+            var source = @"
+using System;
+using System.Diagnostics.CodeAnalysis;
+
+public class C {
+    public Func<T, string> M1<T>() {
+        return Helper.Method1; // 1
+    }
+
+    public Func<T, string> M2<T>() where T : notnull {
+        return Helper.Method1;
+    }
+
+    public Func<T, string> M3<T>() where T : class {
+        return Helper.Method1;
+    }
+
+    public Func<T, string> M4<T>() where T : class? {
+        return Helper.Method1; // 2
+    }
+
+    public Func<T, string> M5<T>() where T : struct {
+        return Helper.Method1;
+
+    }
+
+    public Func<T?, string> M6<T>() {
+        return Helper.Method1; // 3
+    }
+}
+
+static class Helper
+{
+    [return: NotNullIfNotNull(""t"")]
+    public static string? Method1<T>(T t)
+    {
+        return t?.ToString();
+    }
+}
+";
+            var comp = CreateNullableCompilation(new[] { source, NotNullIfNotNullAttributeDefinition, AllowNullAttributeDefinition, DisallowNullAttributeDefinition });
+            comp.VerifyDiagnostics(
+                // (7,16): warning CS8621: Nullability of reference types in return type of 'string? Helper.Method1<T>(T t)' doesn't match the target delegate 'Func<T, string>' (possibly because of nullability attributes).
+                //         return Helper.Method1; // 1
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInReturnTypeOfTargetDelegate, "Helper.Method1").WithArguments("string? Helper.Method1<T>(T t)", "System.Func<T, string>").WithLocation(7, 16),
+                // (19,16): warning CS8621: Nullability of reference types in return type of 'string? Helper.Method1<T>(T t)' doesn't match the target delegate 'Func<T, string>' (possibly because of nullability attributes).
+                //         return Helper.Method1; // 2
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInReturnTypeOfTargetDelegate, "Helper.Method1").WithArguments("string? Helper.Method1<T>(T t)", "System.Func<T, string>").WithLocation(19, 16),
+                // (28,16): warning CS8621: Nullability of reference types in return type of 'string? Helper.Method1<T?>(T? t)' doesn't match the target delegate 'Func<T?, string>' (possibly because of nullability attributes).
+                //         return Helper.Method1; // 3
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInReturnTypeOfTargetDelegate, "Helper.Method1").WithArguments("string? Helper.Method1<T?>(T? t)", "System.Func<T?, string>").WithLocation(28, 16));
+        }
+
+        [Fact]
+        [WorkItem(49865, "https://github.com/dotnet/roslyn/issues/49865")]
+        public void DelegateCreation_FromMethodGroup_NotNullIfNotNull_07()
+        {
+            var source = @"
+using System.Diagnostics.CodeAnalysis;
+
+public class C {
+    public D1<T> M1<T>() {
+        return Helper.Method1; // 1
+    }
+
+    public D2<T> M2<T>() {
+        return Helper.Method1; // 2
+    }
+
+    public D3<T> M3<T>() {
+        return Helper.Method1;
+    }
+}
+
+public delegate string D1<T>(T t);
+public delegate string D2<T>(T? t);
+public delegate string D3<T>([DisallowNull] T t);
+
+static class Helper
+{
+    [return: NotNullIfNotNull(""t"")]
+    public static string? Method1<T>(T t)
+    {
+        return t?.ToString();
+    }
+}
+";
+            var comp = CreateNullableCompilation(new[] { source, NotNullIfNotNullAttributeDefinition, AllowNullAttributeDefinition, DisallowNullAttributeDefinition });
+            comp.VerifyDiagnostics(
+                // (6,16): warning CS8621: Nullability of reference types in return type of 'string? Helper.Method1<T>(T t)' doesn't match the target delegate 'D1<T>' (possibly because of nullability attributes).
+                //         return Helper.Method1; // 1
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInReturnTypeOfTargetDelegate, "Helper.Method1").WithArguments("string? Helper.Method1<T>(T t)", "D1<T>").WithLocation(6, 16),
+                // (10,16): warning CS8621: Nullability of reference types in return type of 'string? Helper.Method1<T?>(T? t)' doesn't match the target delegate 'D2<T>' (possibly because of nullability attributes).
+                //         return Helper.Method1; // 2
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInReturnTypeOfTargetDelegate, "Helper.Method1").WithArguments("string? Helper.Method1<T?>(T? t)", "D2<T>").WithLocation(10, 16));
         }
 
         [Fact]
@@ -75870,6 +80389,39 @@ class Program
                 // (11,29): warning CS8602: Dereference of a possibly null reference.
                 //             case var x when e.ToString() == null: // 1
                 Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "e").WithLocation(11, 29));
+        }
+
+        [Theory]
+        [InlineData("null")]
+        [InlineData("not null")]
+        [InlineData("{}")]
+        public void OtherComparisonsAsPureNullTests_ExtendedProperties_PureNullTest(string pureTest)
+        {
+            var source =
+$@"#nullable enable
+class E
+{{
+    public E Property1 {{ get; set; }} = null!;
+    public object Property2 {{ get; set; }} = null!;
+}}
+class Program
+{{
+    static void F(E e)
+    {{
+        switch (e)
+        {{
+            case var x when e.Property1.Property2.ToString() == null: // 1
+                break;
+            case {{ Property1.Property2: {pureTest} }}:
+                break;
+        }}
+    }}
+}}";
+            var comp = CreateCompilation(source, parseOptions: TestOptions.RegularWithExtendedPropertyPatterns);
+            comp.VerifyDiagnostics(
+                // (13,29): warning CS8602: Dereference of a possibly null reference.
+                //             case var x when e.Property1.Property2.ToString() == null: // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "e.Property1.Property2").WithLocation(13, 29));
         }
 
         [Fact, WorkItem(33526, "https://github.com/dotnet/roslyn/issues/33526")]
@@ -128107,31 +132659,26 @@ public class Program
         if (x?.Length == 2 ? y?.Length == 2 : y?.Length == 3)
         {
             Console.WriteLine(x.Length); // 1
-            Console.WriteLine(y.Length); // 2
+            Console.WriteLine(y.Length);
         }
         else
         {
-            Console.WriteLine(x.Length); // 3
-            Console.WriteLine(y.Length); // 4
+            Console.WriteLine(x.Length); // 2
+            Console.WriteLine(y.Length); // 3
         }
     }
 }";
-            // The first warning produced for y.Length is unexpected.
-            // https://github.com/dotnet/roslyn/issues/36096
             var comp = CreateCompilation(source);
             comp.VerifyDiagnostics(
-                    // (10,31): warning CS8602: Dereference of a possibly null reference.
-                    //             Console.WriteLine(x.Length); // 1
-                    Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(10, 31),
-                    // (11,31): warning CS8602: Dereference of a possibly null reference.
-                    //             Console.WriteLine(y.Length); // 2
-                    Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "y").WithLocation(11, 31),
-                    // (15,31): warning CS8602: Dereference of a possibly null reference.
-                    //             Console.WriteLine(x.Length); // 3
-                    Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(15, 31),
-                    // (16,31): warning CS8602: Dereference of a possibly null reference.
-                    //             Console.WriteLine(y.Length); // 4
-                    Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "y").WithLocation(16, 31)
+                // (10,31): warning CS8602: Dereference of a possibly null reference.
+                //             Console.WriteLine(x.Length); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(10, 31),
+                // (15,31): warning CS8602: Dereference of a possibly null reference.
+                //             Console.WriteLine(x.Length); // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(15, 31),
+                // (16,31): warning CS8602: Dereference of a possibly null reference.
+                //             Console.WriteLine(y.Length); // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "y").WithLocation(16, 31)
 );
         }
 
@@ -142785,30 +147332,18 @@ class Program
 }";
             var comp = CreateCompilation(source, parseOptions: TestOptions.Regular9);
             comp.VerifyDiagnostics(
-                // (7,14): warning CS8600: Converting null literal or possible null value to non-nullable type.
-                //         y1 = default(T);
-                Diagnostic(ErrorCode.WRN_ConvertingNullableToNonNullable, "default(T)").WithLocation(7, 14),
                 // (8,16): warning CS8603: Possible null reference return.
                 //         return y1; // 1
                 Diagnostic(ErrorCode.WRN_NullReferenceReturn, "y1").WithLocation(8, 16),
                 // (14,16): warning CS8603: Possible null reference return.
                 //         return y2; // 2
                 Diagnostic(ErrorCode.WRN_NullReferenceReturn, "y2").WithLocation(14, 16),
-                // (19,14): warning CS8600: Converting null literal or possible null value to non-nullable type.
-                //         y3 = default(T);
-                Diagnostic(ErrorCode.WRN_ConvertingNullableToNonNullable, "default(T)").WithLocation(19, 14),
                 // (20,16): warning CS8603: Possible null reference return.
                 //         return y3; // 3
                 Diagnostic(ErrorCode.WRN_NullReferenceReturn, "y3").WithLocation(20, 16),
-                // (25,14): warning CS8600: Converting null literal or possible null value to non-nullable type.
-                //         y4 = default(T);
-                Diagnostic(ErrorCode.WRN_ConvertingNullableToNonNullable, "default(T)").WithLocation(25, 14),
                 // (26,16): warning CS8603: Possible null reference return.
                 //         return y4; // 4
                 Diagnostic(ErrorCode.WRN_NullReferenceReturn, "y4").WithLocation(26, 16),
-                // (31,14): warning CS8600: Converting null literal or possible null value to non-nullable type.
-                //         y5 = default(U);
-                Diagnostic(ErrorCode.WRN_ConvertingNullableToNonNullable, "default(U)").WithLocation(31, 14),
                 // (32,16): warning CS8603: Possible null reference return.
                 //         return y5; // 5
                 Diagnostic(ErrorCode.WRN_NullReferenceReturn, "y5").WithLocation(32, 16));
@@ -142818,11 +147353,11 @@ class Program
             var locals = tree.GetRoot().DescendantNodes().OfType<VariableDeclaratorSyntax>().ToArray();
             Assert.Equal(5, locals.Length);
             // https://github.com/dotnet/roslyn/issues/46236: Locals should be treated as annotated.
-            VerifyVariableAnnotation(model, locals[0], "T y1", NullableAnnotation.NotAnnotated);
+            VerifyVariableAnnotation(model, locals[0], "T? y1", NullableAnnotation.Annotated);
             VerifyVariableAnnotation(model, locals[1], "T? y2", NullableAnnotation.Annotated);
-            VerifyVariableAnnotation(model, locals[2], "T y3", NullableAnnotation.NotAnnotated);
-            VerifyVariableAnnotation(model, locals[3], "T y4", NullableAnnotation.NotAnnotated);
-            VerifyVariableAnnotation(model, locals[4], "U y5", NullableAnnotation.NotAnnotated);
+            VerifyVariableAnnotation(model, locals[2], "T? y3", NullableAnnotation.Annotated);
+            VerifyVariableAnnotation(model, locals[3], "T? y4", NullableAnnotation.Annotated);
+            VerifyVariableAnnotation(model, locals[4], "U? y5", NullableAnnotation.Annotated);
         }
 
         private static void VerifyVariableAnnotation(SemanticModel model, VariableDeclaratorSyntax syntax, string expectedDisplay, NullableAnnotation expectedAnnotation)
@@ -146614,6 +151149,144 @@ public class C
                 i3.Interfaces().ToTestDisplayStrings(TypeWithAnnotations.TestDisplayFormat));
             AssertEx.Equal(new string[] { "I<object?>", "I2<object!>", "I<object!>" },
                 i3.AllInterfaces().ToTestDisplayStrings(TypeWithAnnotations.TestDisplayFormat));
+        }
+
+        [Fact]
+        public void VarPatternDeclaration_TopLevel()
+        {
+            var src = @"
+#nullable enable
+public class C
+{
+    public void M(string? x)
+    {
+        if (Identity(x) is var y)
+        {
+            y.ToString(); // 1
+        }
+
+        if (Identity(x) is not null and var z)
+        {
+            z.ToString();
+        }
+    }
+
+    public T Identity<T>(T t) => t;
+}
+";
+            var comp = CreateCompilation(src);
+            comp.VerifyDiagnostics(
+                // (9,13): warning CS8602: Dereference of a possibly null reference.
+                //             y.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "y").WithLocation(9, 13)
+                );
+        }
+
+        [Fact]
+        public void VarPatternDeclaration_Nested()
+        {
+            var src = @"
+#nullable enable
+public class Container<T>
+{
+    public T Item { get; set; } = default!;
+}
+public class C
+{
+    public void M(Container<string?> x)
+    {
+        if (Identity(x) is { Item: var y })
+        {
+            y.ToString(); // 1
+        }
+
+        if (Identity(x) is { Item: not null and var z })
+        {
+            z.ToString();
+        }
+    }
+
+    public T Identity<T>(T t) => t;
+}
+";
+            var comp = CreateCompilation(src);
+            comp.VerifyDiagnostics(
+                // (13,13): warning CS8602: Dereference of a possibly null reference.
+                //             y.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "y").WithLocation(13, 13)
+                );
+        }
+
+        [Theory, WorkItem(52925, "https://github.com/dotnet/roslyn/issues/52925")]
+        [WorkItem(46236, "https://github.com/dotnet/roslyn/issues/46236")]
+        [InlineData("")]
+        [InlineData(" where T : notnull")]
+        [InlineData(" where T : class")]
+        [InlineData(" where T : class?")]
+        public void VarDeclarationWithGenericType(string constraint)
+        {
+            var src = $@"
+#nullable enable
+
+class C<T> {constraint}
+{{
+    void M(T initial, System.Func<T, T?> selector)
+    {{
+        for (var current = initial; current != null; current = selector(current))
+        {{
+        }}
+
+        var current2 = initial;
+        current2 = default;
+
+        for (T? current3 = initial; current3 != null; current3 = selector(current3))
+        {{
+        }}
+
+        T? current4 = initial;
+        current4 = default;
+    }}
+}}
+";
+            var comp = CreateCompilation(src);
+            comp.VerifyDiagnostics();
+
+            var tree = comp.SyntaxTrees.Single();
+            var model = comp.GetSemanticModel(tree, ignoreAccessibility: false);
+            var declarations = tree.GetRoot().DescendantNodes().OfType<VariableDeclarationSyntax>();
+            foreach (var declaration in declarations)
+            {
+                var local = (ILocalSymbol)model.GetDeclaredSymbol(declaration.Variables.Single());
+                Assert.Equal("T?", local.Type.ToTestDisplayString());
+                Assert.Equal(CodeAnalysis.NullableAnnotation.Annotated, local.Type.NullableAnnotation);
+            }
+        }
+
+        [Theory, WorkItem(52925, "https://github.com/dotnet/roslyn/issues/52925")]
+        [InlineData("")]
+        [InlineData(" where T : notnull")]
+        [InlineData(" where T : class")]
+        [InlineData(" where T : class?")]
+        public void VarDeclarationWithGenericType_RefValue(string constraint)
+        {
+            var src = $@"
+#nullable enable
+
+class C<T> {constraint}
+{{
+    ref T Passthrough(ref T value)
+    {{
+        ref var value2 = ref value;
+        return ref value2;
+    }}
+}}
+";
+            var comp = CreateCompilation(src);
+            comp.VerifyDiagnostics(
+                // (9,20): warning CS8619: Nullability of reference types in value of type 'T?' doesn't match target type 'T'.
+                //         return ref value2;
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInAssignment, "value2").WithArguments("T?", "T").WithLocation(9, 20)
+                );
         }
     }
 }
