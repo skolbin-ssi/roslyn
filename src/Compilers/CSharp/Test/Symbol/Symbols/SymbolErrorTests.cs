@@ -1766,9 +1766,6 @@ class C
                 // (3,23): error CS8503: The modifier 'public' is not valid for this item in C# 7. Please use language version '8.0' or greater.
                 //     public static int P1 { get; }
                 Diagnostic(ErrorCode.ERR_InvalidModifierForLanguageVersion, "P1").WithArguments("public", "7.0", "8.0").WithLocation(3, 23),
-                // (3,28): error CS8652: The feature 'default interface implementation' is not available in C# 7. Please use language version 8.0 or greater.
-                //     public static int P1 { get; }
-                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion7, "get").WithArguments("default interface implementation", "8.0").WithLocation(3, 28),
                 // (4,18): error CS8503: The modifier 'abstract' is not valid for this item in C# 7. Please use language version '8.0' or greater.
                 //     abstract int P2 { static set; }
                 Diagnostic(ErrorCode.ERR_InvalidModifierForLanguageVersion, "P2").WithArguments("abstract", "7.0", "8.0").WithLocation(4, 18),
@@ -2082,8 +2079,17 @@ interface I<T>
     }
 }
 ";
-            var comp = DiagnosticsUtils.VerifyErrorsAndGetCompilationWithMscorlib(text,
-                new ErrorDescription { Code = (int)ErrorCode.ERR_StaticNotVirtual, Line = 9, Column = 37 });
+            CreateCompilation(text, parseOptions: TestOptions.RegularPreview).VerifyDiagnostics(
+                // (7,18): error CS0534: 'MyClass2' does not implement inherited abstract member 'MyClass.MyMethod()'
+                //     public class MyClass2 : MyClass
+                Diagnostic(ErrorCode.ERR_UnimplementedAbstractMethod, "MyClass2").WithArguments("MyNamespace.MyClass2", "MyNamespace.MyClass.MyMethod()").WithLocation(7, 18),
+                // (9,37): error CS0112: A static member cannot be marked as 'override'
+                //         override public static void MyMethod()   // CS0112, remove static keyword
+                Diagnostic(ErrorCode.ERR_StaticNotVirtual, "MyMethod").WithArguments("override").WithLocation(9, 37),
+                // (9,37): warning CS0114: 'MyClass2.MyMethod()' hides inherited member 'MyClass.MyMethod()'. To make the current member override that implementation, add the override keyword. Otherwise add the new keyword.
+                //         override public static void MyMethod()   // CS0112, remove static keyword
+                Diagnostic(ErrorCode.WRN_NewOrOverrideExpected, "MyMethod").WithArguments("MyNamespace.MyClass2.MyMethod()", "MyNamespace.MyClass.MyMethod()").WithLocation(9, 37)
+                );
         }
 
         [Fact]
@@ -2103,24 +2109,30 @@ class B : A
 ";
             var tree = Parse(text, options: CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp5));
             CreateCompilation(tree).VerifyDiagnostics(
-    // (78): error CS0112: A static member 'B.P' cannot be marked as override, virtual, or abstract
-    //     protected static override object P { get { return null; } }
-    Diagnostic(ErrorCode.ERR_StaticNotVirtual, "P").WithArguments("B.P").WithLocation(7, 38),
-    // (8,34): error CS0112: A static member 'B.Q' cannot be marked as override, virtual, or abstract
-    //     public static virtual object Q { get; }
-    Diagnostic(ErrorCode.ERR_StaticNotVirtual, "Q").WithArguments("B.Q").WithLocation(8, 34),
-    // (8,34): error CS8026: Feature 'readonly automatically implemented properties' is not available in C# 5. Please use language version 6 or greater.
-    //     public static virtual object Q { get; }
-    Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion5, "Q").WithArguments("readonly automatically implemented properties", "6").WithLocation(8, 34),
-    // (9,37): error CS0112: A static member 'B.R' cannot be marked as override, virtual, or abstract
-    //     internal static abstract object R { get; set; }
-    Diagnostic(ErrorCode.ERR_StaticNotVirtual, "R").WithArguments("B.R").WithLocation(9, 37),
-    // (9,41): error CS0513: 'B.R.get' is abstract but it is contained in non-abstract type 'B'
-    //     internal static abstract object R { get; set; }
-    Diagnostic(ErrorCode.ERR_AbstractInConcreteClass, "get").WithArguments("B.R.get", "B").WithLocation(9, 41),
-    // (9,46): error CS0513: 'B.R.set' is abstract but it is contained in non-abstract type 'B'
-    //     internal static abstract object R { get; set; }
-    Diagnostic(ErrorCode.ERR_AbstractInConcreteClass, "set").WithArguments("B.R.set", "B").WithLocation(9, 46));
+                // (5,7): error CS0534: 'B' does not implement inherited abstract member 'A.P.get'
+                // class B : A
+                Diagnostic(ErrorCode.ERR_UnimplementedAbstractMethod, "B").WithArguments("B", "A.P.get").WithLocation(5, 7),
+                // (7,38): error CS0112: A static member cannot be marked as 'override'
+                //     protected static override object P { get { return null; } }
+                Diagnostic(ErrorCode.ERR_StaticNotVirtual, "P").WithArguments("override").WithLocation(7, 38),
+                // (7,38): warning CS0114: 'B.P' hides inherited member 'A.P'. To make the current member override that implementation, add the override keyword. Otherwise add the new keyword.
+                //     protected static override object P { get { return null; } }
+                Diagnostic(ErrorCode.WRN_NewOrOverrideExpected, "P").WithArguments("B.P", "A.P").WithLocation(7, 38),
+                // (8,34): error CS0112: A static member cannot be marked as 'virtual'
+                //     public static virtual object Q { get; }
+                Diagnostic(ErrorCode.ERR_StaticNotVirtual, "Q").WithArguments("virtual").WithLocation(8, 34),
+                // (8,34): error CS8026: Feature 'readonly automatically implemented properties' is not available in C# 5. Please use language version 6 or greater.
+                //     public static virtual object Q { get; }
+                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion5, "Q").WithArguments("readonly automatically implemented properties", "6").WithLocation(8, 34),
+                // (9,37): error CS0112: A static member cannot be marked as 'abstract'
+                //     internal static abstract object R { get; set; }
+                Diagnostic(ErrorCode.ERR_StaticNotVirtual, "R").WithArguments("abstract").WithLocation(9, 37),
+                // (9,41): error CS0513: 'B.R.get' is abstract but it is contained in non-abstract type 'B'
+                //     internal static abstract object R { get; set; }
+                Diagnostic(ErrorCode.ERR_AbstractInConcreteClass, "get").WithArguments("B.R.get", "B").WithLocation(9, 41),
+                // (9,46): error CS0513: 'B.R.set' is abstract but it is contained in non-abstract type 'B'
+                //     internal static abstract object R { get; set; }
+                Diagnostic(ErrorCode.ERR_AbstractInConcreteClass, "set").WithArguments("B.R.set", "B").WithLocation(9, 46));
         }
 
         [Fact]
@@ -2138,12 +2150,29 @@ abstract class B : A
     internal static abstract event System.Action R;
 }
 ";
-            var comp = DiagnosticsUtils.VerifyErrorsAndGetCompilationWithMscorlib(text,
-                new ErrorDescription { Code = (int)ErrorCode.ERR_StaticNotVirtual, Line = 7, Column = 51 },
-                new ErrorDescription { Code = (int)ErrorCode.ERR_StaticNotVirtual, Line = 8, Column = 47 },
-                new ErrorDescription { Code = (int)ErrorCode.ERR_StaticNotVirtual, Line = 9, Column = 50 },
-                new ErrorDescription { Code = (int)ErrorCode.WRN_UnreferencedEvent, Line = 7, Column = 51, IsWarning = true },
-                new ErrorDescription { Code = (int)ErrorCode.WRN_UnreferencedEvent, Line = 8, Column = 47, IsWarning = true });
+            CreateCompilation(text, parseOptions: TestOptions.RegularPreview).VerifyDiagnostics(
+                // (7,51): error CS0112: A static member cannot be marked as 'override'
+                //     protected static override event System.Action P;
+                Diagnostic(ErrorCode.ERR_StaticNotVirtual, "P").WithArguments("override").WithLocation(7, 51),
+                // (7,51): error CS0533: 'B.P' hides inherited abstract member 'A.P'
+                //     protected static override event System.Action P;
+                Diagnostic(ErrorCode.ERR_HidingAbstractMethod, "P").WithArguments("B.P", "A.P").WithLocation(7, 51),
+                // (7,51): warning CS0114: 'B.P' hides inherited member 'A.P'. To make the current member override that implementation, add the override keyword. Otherwise add the new keyword.
+                //     protected static override event System.Action P;
+                Diagnostic(ErrorCode.WRN_NewOrOverrideExpected, "P").WithArguments("B.P", "A.P").WithLocation(7, 51),
+                // (7,51): warning CS0067: The event 'B.P' is never used
+                //     protected static override event System.Action P;
+                Diagnostic(ErrorCode.WRN_UnreferencedEvent, "P").WithArguments("B.P").WithLocation(7, 51),
+                // (8,47): error CS0112: A static member cannot be marked as 'virtual'
+                //     public static virtual event System.Action Q;
+                Diagnostic(ErrorCode.ERR_StaticNotVirtual, "Q").WithArguments("virtual").WithLocation(8, 47),
+                // (8,47): warning CS0067: The event 'B.Q' is never used
+                //     public static virtual event System.Action Q;
+                Diagnostic(ErrorCode.WRN_UnreferencedEvent, "Q").WithArguments("B.Q").WithLocation(8, 47),
+                // (9,50): error CS0112: A static member cannot be marked as 'abstract'
+                //     internal static abstract event System.Action R;
+                Diagnostic(ErrorCode.ERR_StaticNotVirtual, "R").WithArguments("abstract").WithLocation(9, 50)
+                );
         }
 
         [Fact]
@@ -10362,11 +10391,11 @@ public struct S
 ";
             var comp = CreateCompilation(text);
             comp.VerifyDiagnostics(
-// (4,37): error CS0555: User-defined operator cannot take an object of the enclosing type and convert to an object of the enclosing type
+// (4,37): error CS0555: User-defined operator cannot convert a type to itself
 //     public static implicit operator MyClass(MyClass aa)   // CS0555
 Diagnostic(ErrorCode.ERR_IdentityConversion, "MyClass"),
 
-// (11,37): error CS0555: User-defined operator cannot take an object of the enclosing type and convert to an object of the enclosing type
+// (11,37): error CS0555: User-defined operator cannot convert a type to itself
 //     public static implicit operator S?(S s) { return s; }
 Diagnostic(ErrorCode.ERR_IdentityConversion, "S?")
                 );
@@ -10625,24 +10654,29 @@ interface IA
     }
 }
 ";
-            var comp = CreateCompilation(text);
+            var comp = CreateCompilation(text, parseOptions: TestOptions.Regular9);
             comp.VerifyDiagnostics(
-                // (12,13): error CS0573: 'cly': cannot have instance property or field initializers in structs
+                // (12,13): error CS8773: Feature 'struct field initializers' is not available in C# 9.0. Please use language version 10.0 or greater.
                 //         clx a = new clx();   // CS8036
-                Diagnostic(ErrorCode.ERR_FieldInitializerInStruct, "a").WithArguments("x.cly").WithLocation(12, 13),
-                // (13,13): error CS0573: 'cly': cannot have instance property or field initializers in structs
+                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion9, "a").WithArguments("struct field initializers", "10.0").WithLocation(12, 13),
+                // (13,13): error CS8773: Feature 'struct field initializers' is not available in C# 9.0. Please use language version 10.0 or greater.
                 //         int i = 7;           // CS8036
-                Diagnostic(ErrorCode.ERR_FieldInitializerInStruct, "i").WithArguments("x.cly").WithLocation(13, 13),
-                // (12,13): warning CS0169: The field 'cly.a' is never used
-                //         clx a = new clx();   // CS8036
-                Diagnostic(ErrorCode.WRN_UnreferencedField, "a").WithArguments("x.cly.a").WithLocation(12, 13),
-                // (13,13): warning CS0169: The field 'cly.i' is never used
+                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion9, "i").WithArguments("struct field initializers", "10.0").WithLocation(13, 13),
+                // (13,13): warning CS0414: The field 'cly.i' is assigned but its value is never used
                 //         int i = 7;           // CS8036
-                Diagnostic(ErrorCode.WRN_UnreferencedField, "i").WithArguments("x.cly.i").WithLocation(13, 13),
+                Diagnostic(ErrorCode.WRN_UnreferencedFieldAssg, "i").WithArguments("x.cly.i").WithLocation(13, 13),
                 // (15,20): warning CS0414: The field 'cly.s' is assigned but its value is never used
                 //         static int s = 2;    // no error
-                Diagnostic(ErrorCode.WRN_UnreferencedFieldAssg, "s").WithArguments("x.cly.s").WithLocation(15, 20)
-            );
+                Diagnostic(ErrorCode.WRN_UnreferencedFieldAssg, "s").WithArguments("x.cly.s").WithLocation(15, 20));
+
+            comp = CreateCompilation(text);
+            comp.VerifyDiagnostics(
+                // (13,13): warning CS0414: The field 'cly.i' is assigned but its value is never used
+                //         int i = 7;           // CS8036
+                Diagnostic(ErrorCode.WRN_UnreferencedFieldAssg, "i").WithArguments("x.cly.i").WithLocation(13, 13),
+                // (15,20): warning CS0414: The field 'cly.s' is assigned but its value is never used
+                //         static int s = 2;    // no error
+                Diagnostic(ErrorCode.WRN_UnreferencedFieldAssg, "s").WithArguments("x.cly.s").WithLocation(15, 20));
         }
 
         [Fact]
@@ -10663,13 +10697,21 @@ interface IA
 ";
             var comp = CreateCompilation(text, parseOptions: TestOptions.Regular.WithLanguageVersion(LanguageVersion.CSharp5));
             comp.VerifyDiagnostics(
-    // (5,16): error CS0568: Structs cannot contain explicit parameterless constructors
-    //         public S1() {}
-    Diagnostic(ErrorCode.ERR_StructsCantContainDefaultConstructor, "S1").WithLocation(5, 16),
-    // (9,13): error CS0568: Structs cannot contain explicit parameterless constructors
-    //             S2() { }
-    Diagnostic(ErrorCode.ERR_StructsCantContainDefaultConstructor, "S2").WithLocation(9, 13)
-   );
+                // (5,16): error CS8026: Feature 'parameterless struct constructors' is not available in C# 5. Please use language version 10.0 or greater.
+                //         public S1() {}
+                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion5, "S1").WithArguments("parameterless struct constructors", "10.0").WithLocation(5, 16),
+                // (9,13): error CS8026: Feature 'parameterless struct constructors' is not available in C# 5. Please use language version 10.0 or greater.
+                //             S2() { }
+                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion5, "S2").WithArguments("parameterless struct constructors", "10.0").WithLocation(9, 13),
+                // (9,13): error CS8938: The parameterless struct constructor must be 'public'.
+                //             S2() { }
+                Diagnostic(ErrorCode.ERR_NonPublicParameterlessStructConstructor, "S2").WithLocation(9, 13));
+
+            comp = CreateCompilation(text);
+            comp.VerifyDiagnostics(
+                // (9,13): error CS8918: The parameterless struct constructor must be 'public'.
+                //             S2() { }
+                Diagnostic(ErrorCode.ERR_NonPublicParameterlessStructConstructor, "S2").WithLocation(9, 13));
         }
 
         [Fact]

@@ -166,7 +166,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
         private static readonly Dictionary<string, ImmutableArray<NamedTypeSymbol>> s_emptyTypeMembers = new Dictionary<string, ImmutableArray<NamedTypeSymbol>>(EmptyComparer.Instance);
         private Dictionary<string, ImmutableArray<NamedTypeSymbol>>? _lazyTypeMembers;
         private ImmutableArray<Symbol> _lazyMembersFlattened;
-        private ImmutableArray<SynthesizedExplicitImplementationForwardingMethod> _lazySynthesizedExplicitImplementations;
+        private SynthesizedExplicitImplementations? _lazySynthesizedExplicitImplementations;
         private int _lazyKnownCircularStruct;
         private LexicalSortKey _lazyLexicalSortKey = LexicalSortKey.NotInitialized;
 
@@ -2957,8 +2957,9 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                         break;
 
                     case SyntaxKind.NamespaceDeclaration:
+                    case SyntaxKind.FileScopedNamespaceDeclaration:
                         // The members of a global anonymous type is in a syntax tree of a namespace declaration or a compilation unit.
-                        AddNonTypeMembers(builder, ((NamespaceDeclarationSyntax)syntax).Members, diagnostics);
+                        AddNonTypeMembers(builder, ((BaseNamespaceDeclarationSyntax)syntax).Members, diagnostics);
                         break;
 
                     case SyntaxKind.CompilationUnit:
@@ -2978,14 +2979,6 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                         var parameterList = recordDecl.ParameterList;
                         noteRecordParameters(recordDecl, parameterList, builder, diagnostics);
                         AddNonTypeMembers(builder, recordDecl.Members, diagnostics);
-
-                        // We will allow declaring parameterless constructors
-                        // Tracking issue https://github.com/dotnet/roslyn/issues/52240
-                        if (syntax.Kind() == SyntaxKind.RecordStructDeclaration && parameterList?.ParameterCount == 0)
-                        {
-                            diagnostics.Add(ErrorCode.ERR_StructsCantContainDefaultConstructor, parameterList.Location);
-                        }
-
                         break;
 
                     default:
@@ -3371,10 +3364,13 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                             diagnostics.Add(ErrorCode.ERR_InterfacesCantContainConstructors, member.Locations[0]);
                             break;
                         case MethodKind.Conversion:
-                            diagnostics.Add(ErrorCode.ERR_InterfacesCantContainConversionOrEqualityOperators, member.Locations[0]);
+                            if (!meth.IsAbstract)
+                            {
+                                diagnostics.Add(ErrorCode.ERR_InterfacesCantContainConversionOrEqualityOperators, member.Locations[0]);
+                            }
                             break;
                         case MethodKind.UserDefinedOperator:
-                            if (meth.Name == WellKnownMemberNames.EqualityOperatorName || meth.Name == WellKnownMemberNames.InequalityOperatorName)
+                            if (!meth.IsAbstract && (meth.Name == WellKnownMemberNames.EqualityOperatorName || meth.Name == WellKnownMemberNames.InequalityOperatorName))
                             {
                                 diagnostics.Add(ErrorCode.ERR_InterfacesCantContainConversionOrEqualityOperators, member.Locations[0]);
                             }
@@ -3420,13 +3416,18 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                 {
                     if (m.MethodKind == MethodKind.Constructor && m.ParameterCount == 0)
                     {
+                        var location = m.Locations[0];
                         if (isEnum)
                         {
-                            diagnostics.Add(ErrorCode.ERR_EnumsCantContainDefaultConstructor, m.Locations[0]);
+                            diagnostics.Add(ErrorCode.ERR_EnumsCantContainDefaultConstructor, location);
                         }
                         else
                         {
-                            diagnostics.Add(ErrorCode.ERR_StructsCantContainDefaultConstructor, m.Locations[0]);
+                            MessageID.IDS_FeatureParameterlessStructConstructors.CheckFeatureAvailability(diagnostics, m.DeclaringCompilation, location);
+                            if (m.DeclaredAccessibility != Accessibility.Public)
+                            {
+                                diagnostics.Add(ErrorCode.ERR_NonPublicParameterlessStructConstructor, location);
+                            }
                         }
                     }
                 }
@@ -3448,8 +3449,8 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
             {
                 foreach (FieldOrPropertyInitializer initializer in initializers)
                 {
-                    // '{0}': cannot have instance field initializers in structs
-                    diagnostics.Add(ErrorCode.ERR_FieldInitializerInStruct, (initializer.FieldOpt.AssociatedSymbol ?? initializer.FieldOpt).Locations[0], this);
+                    var symbol = initializer.FieldOpt.AssociatedSymbol ?? initializer.FieldOpt;
+                    MessageID.IDS_FeatureStructFieldInitializers.CheckFeatureAvailability(diagnostics, symbol.DeclaringCompilation, symbol.Locations[0]);
                 }
             }
         }
@@ -3573,6 +3574,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                                                                                                                               )),
                     RefKind.None,
                     isInitOnly: false,
+                    isStatic: false,
                     TypeWithAnnotations.Create(compilation.GetSpecialType(SpecialType.System_Void)),
                     ImmutableArray<CustomModifier>.Empty,
                     ImmutableArray<MethodSymbol>.Empty);
@@ -3619,6 +3621,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                                                                 )),
                     RefKind.None,
                     isInitOnly: false,
+                    isStatic: false,
                     TypeWithAnnotations.Create(compilation.GetSpecialType(SpecialType.System_Void)),
                     ImmutableArray<CustomModifier>.Empty,
                     ImmutableArray<MethodSymbol>.Empty);
@@ -3665,6 +3668,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                         RefKind.None)),
                     RefKind.None,
                     isInitOnly: false,
+                    isStatic: false,
                     returnType: TypeWithAnnotations.Create(compilation.GetSpecialType(SpecialType.System_Boolean)),
                     refCustomModifiers: ImmutableArray<CustomModifier>.Empty,
                     explicitInterfaceImplementations: ImmutableArray<MethodSymbol>.Empty);
@@ -3719,6 +3723,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                     ImmutableArray<ParameterSymbol>.Empty,
                     RefKind.None,
                     isInitOnly: false,
+                    isStatic: false,
                     returnType: TypeWithAnnotations.Create(compilation.GetSpecialType(SpecialType.System_String)),
                     refCustomModifiers: ImmutableArray<CustomModifier>.Empty,
                     explicitInterfaceImplementations: ImmutableArray<MethodSymbol>.Empty);
@@ -3887,6 +3892,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                     ImmutableArray<ParameterSymbol>.Empty,
                     RefKind.None,
                     isInitOnly: false,
+                    isStatic: false,
                     TypeWithAnnotations.Create(compilation.GetSpecialType(SpecialType.System_Int32)),
                     ImmutableArray<CustomModifier>.Empty,
                     ImmutableArray<MethodSymbol>.Empty);
@@ -3984,6 +3990,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                                                                 )),
                     RefKind.None,
                     isInitOnly: false,
+                    isStatic: false,
                     TypeWithAnnotations.Create(compilation.GetSpecialType(SpecialType.System_Boolean)),
                     ImmutableArray<CustomModifier>.Empty,
                     ImmutableArray<MethodSymbol>.Empty);
@@ -4088,7 +4095,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
 
             // NOTE: Per section 11.3.8 of the spec, "every struct implicitly has a parameterless instance constructor".
             // We won't insert a parameterless constructor for a struct if there already is one.
-            // We don't expect anything to be emitted, but it should be in the symbol table.
+            // The synthesized constructor will only be emitted if there are field initializers, but it should be in the symbol table.
             if ((!hasParameterlessInstanceConstructor && this.IsStructType()) ||
                 (!hasInstanceConstructor && !this.IsStatic && !this.IsInterface))
             {
@@ -4399,7 +4406,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                             }
 
                             var method = SourceUserDefinedConversionSymbol.CreateUserDefinedConversionSymbol(
-                                this, conversionOperatorSyntax, compilation.IsNullableAnalysisEnabledIn(conversionOperatorSyntax), diagnostics);
+                                this, bodyBinder, conversionOperatorSyntax, compilation.IsNullableAnalysisEnabledIn(conversionOperatorSyntax), diagnostics);
                             builder.NonTypeMembers.Add(method);
                         }
                         break;
@@ -4414,7 +4421,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                             }
 
                             var method = SourceUserDefinedOperatorSymbol.CreateUserDefinedOperatorSymbol(
-                                this, operatorSyntax, compilation.IsNullableAnalysisEnabledIn(operatorSyntax), diagnostics);
+                                this, bodyBinder, operatorSyntax, compilation.IsNullableAnalysisEnabledIn(operatorSyntax), diagnostics);
                             builder.NonTypeMembers.Add(method);
                         }
                         break;
@@ -4478,8 +4485,9 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                     default:
                         Debug.Assert(
                             SyntaxFacts.IsTypeDeclaration(m.Kind()) ||
-                            m.Kind() == SyntaxKind.NamespaceDeclaration ||
-                            m.Kind() == SyntaxKind.IncompleteMember);
+                            m.Kind() is SyntaxKind.NamespaceDeclaration or
+                                        SyntaxKind.FileScopedNamespaceDeclaration or
+                                        SyntaxKind.IncompleteMember);
                         break;
                 }
             }
@@ -4633,6 +4641,37 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
         public sealed override NamedTypeSymbol ConstructedFrom
         {
             get { return this; }
+        }
+
+        internal sealed override bool HasFieldInitializers() => InstanceInitializers.Length > 0;
+
+        internal class SynthesizedExplicitImplementations
+        {
+            public static readonly SynthesizedExplicitImplementations Empty = new SynthesizedExplicitImplementations(ImmutableArray<SynthesizedExplicitImplementationForwardingMethod>.Empty,
+                                                                                                                     ImmutableArray<(MethodSymbol Body, MethodSymbol Implemented)>.Empty);
+
+            public readonly ImmutableArray<SynthesizedExplicitImplementationForwardingMethod> ForwardingMethods;
+            public readonly ImmutableArray<(MethodSymbol Body, MethodSymbol Implemented)> MethodImpls;
+
+            private SynthesizedExplicitImplementations(
+                ImmutableArray<SynthesizedExplicitImplementationForwardingMethod> forwardingMethods,
+                ImmutableArray<(MethodSymbol Body, MethodSymbol Implemented)> methodImpls)
+            {
+                ForwardingMethods = forwardingMethods.NullToEmpty();
+                MethodImpls = methodImpls.NullToEmpty();
+            }
+
+            internal static SynthesizedExplicitImplementations Create(
+                ImmutableArray<SynthesizedExplicitImplementationForwardingMethod> forwardingMethods,
+                ImmutableArray<(MethodSymbol Body, MethodSymbol Implemented)> methodImpls)
+            {
+                if (forwardingMethods.IsDefaultOrEmpty && methodImpls.IsDefaultOrEmpty)
+                {
+                    return Empty;
+                }
+
+                return new SynthesizedExplicitImplementations(forwardingMethods, methodImpls);
+            }
         }
     }
 }

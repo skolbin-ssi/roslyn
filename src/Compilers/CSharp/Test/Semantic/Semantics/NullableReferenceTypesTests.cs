@@ -1945,13 +1945,13 @@ class C
         }
     }
 }";
-            CreateCompilation(source).VerifyDiagnostics(
+            CreateCompilation(source, parseOptions: TestOptions.Regular9).VerifyDiagnostics(
                 // (8,9): error CS1656: Cannot assign to 'E' because it is a 'method group'
                 //         a.E! += a.E!; // 1
                 Diagnostic(ErrorCode.ERR_AssgReadonlyLocalCause, "a.E").WithArguments("E", "method group").WithLocation(8, 9),
-                // (9,13): error CS8652: The feature 'inferred delegate type' is currently in Preview and *unsupported*. To use Preview features, use the 'preview' language version.
+                // (9,13): error CS0019: Operator '!=' cannot be applied to operands of type 'method group' and '<null>'
                 //         if (a.E! != null) // 2
-                Diagnostic(ErrorCode.ERR_FeatureInPreview, "a.E").WithArguments("inferred delegate type").WithLocation(9, 13),
+                Diagnostic(ErrorCode.ERR_BadBinaryOps, "a.E! != null").WithArguments("!=", "method group", "<null>").WithLocation(9, 13),
                 // (11,15): error CS1503: Argument 1: cannot convert from 'method group' to 'A'
                 //             M(a.E!); // 3
                 Diagnostic(ErrorCode.ERR_BadArgType, "a.E").WithArguments("1", "method group", "A").WithLocation(11, 15),
@@ -1970,9 +1970,9 @@ class C
                 // (17,9): error CS1656: Cannot assign to 'F' because it is a 'method group'
                 //         a.F! += a.F!; // 8
                 Diagnostic(ErrorCode.ERR_AssgReadonlyLocalCause, "a.F").WithArguments("F", "method group").WithLocation(17, 9),
-                // (18,13): error CS8652: The feature 'inferred delegate type' is currently in Preview and *unsupported*. To use Preview features, use the 'preview' language version.
+                // (18,13): error CS0019: Operator '!=' cannot be applied to operands of type 'method group' and '<null>'
                 //         if (a.F! != null) // 9
-                Diagnostic(ErrorCode.ERR_FeatureInPreview, "a.F").WithArguments("inferred delegate type").WithLocation(18, 13),
+                Diagnostic(ErrorCode.ERR_BadBinaryOps, "a.F! != null").WithArguments("!=", "method group", "<null>").WithLocation(18, 13),
                 // (20,15): error CS1503: Argument 1: cannot convert from 'method group' to 'A'
                 //             M(a.F!); // 10
                 Diagnostic(ErrorCode.ERR_BadArgType, "a.F").WithArguments("1", "method group", "A").WithLocation(20, 15),
@@ -58058,6 +58058,49 @@ class C
         }
 
         [Fact]
+        public void ObjectInitializer_ParameterlessStructConstructor()
+        {
+            var src = @"
+#nullable enable
+
+var s1 = new S1() { };
+s1.field.ToString();
+
+var s2 = new S2() { };
+s2.field.ToString(); // 1
+
+var s3 = new S3() { };
+s3.field.ToString();
+
+public struct S1
+{
+    public string field;
+
+    public S1()
+    {
+        field = string.Empty;
+    }
+}
+
+public struct S2
+{
+    public string field;
+}
+
+public struct S3
+{
+    public string field = string.Empty;
+}
+";
+            var comp = CreateCompilation(src);
+            comp.VerifyDiagnostics(
+                // (8,1): warning CS8602: Dereference of a possibly null reference.
+                // s2.field.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "s2.field").WithLocation(8, 1)
+                );
+        }
+
+        [Fact]
         public void IdentityConversion_ObjectElementInitializerArgumentsOrder()
         {
             var source =
@@ -61873,9 +61916,9 @@ static class E
 }";
             var comp = CreateCompilation(new[] { source }, options: WithNullableEnable());
             comp.VerifyDiagnostics(
-                // (5,13): error CS0815: Cannot assign lambda expression to an implicitly-typed variable
+                // (5,17): error CS8917: The delegate type could not be inferred.
                 //         var y = x => x;
-                Diagnostic(ErrorCode.ERR_ImplicitlyTypedVariableAssignedBadValue, "y = x => x").WithArguments("lambda expression").WithLocation(5, 13));
+                Diagnostic(ErrorCode.ERR_CannotInferDelegateType, "x => x").WithLocation(5, 17));
         }
 
         [Fact]
@@ -61893,9 +61936,9 @@ static class E
 }";
             var comp = CreateCompilation(new[] { source }, options: WithNullableEnable());
             comp.VerifyDiagnostics(
-                // (5,13): error CS0815: Cannot assign lambda expression to an implicitly-typed variable
+                // (5,17): error CS8917: The delegate type could not be inferred.
                 //         var z = y => y ?? x.ToString();
-                Diagnostic(ErrorCode.ERR_ImplicitlyTypedVariableAssignedBadValue, "z = y => y ?? x.ToString()").WithArguments("lambda expression").WithLocation(5, 13),
+                Diagnostic(ErrorCode.ERR_CannotInferDelegateType, "y => y ?? x.ToString()").WithLocation(5, 17),
                 // (5,27): warning CS8602: Dereference of a possibly null reference.
                 //         var z = y => y ?? x.ToString();
                 Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(5, 27),
@@ -63521,6 +63564,238 @@ class C
 
             c.VerifyDiagnostics(
                 );
+        }
+
+        [Theory]
+        [CombinatorialData]
+        public void StringInterpolation_02(bool useBoolReturns, bool validityParameter, [CombinatorialValues(@"$""{s = """"}{s.ToString()}""", @"$""{s = """"}"" + $""{s.ToString()}""")] string expression)
+        {
+            CSharpCompilation c = CreateCompilation(new[] { @"
+#nullable enable
+
+string? s = null;
+M(" + expression + @", s);
+
+void M(CustomHandler c, string s) {}
+", GetInterpolatedStringCustomHandlerType("CustomHandler", "partial struct", useBoolReturns, includeTrailingOutConstructorParameter: validityParameter) }, parseOptions: TestOptions.RegularPreview);
+
+            if (validityParameter)
+            {
+                c.VerifyDiagnostics(
+                    // (5,30): warning CS8604: Possible null reference argument for parameter 's' in 'void M(CustomHandler c, string s)'.
+                    // M($"{s = ""}{s.ToString()}", s);
+                    Diagnostic(ErrorCode.WRN_NullReferenceArgument, "s").WithArguments("s", "void M(CustomHandler c, string s)").WithLocation(5, 19 + expression.IndexOf("s.ToString"))
+                );
+            }
+            else
+            {
+                c.VerifyDiagnostics();
+            }
+        }
+
+        [Theory]
+        [CombinatorialData]
+        public void StringInterpolation_03(bool useBoolReturns, bool validityParameter, [CombinatorialValues(@"$""""", @"$"""" + $""""")] string expression)
+        {
+            CSharpCompilation c = CreateCompilation(new[] { @"
+using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
+#nullable enable
+
+string? s = """";
+M(
+#line 1000
+    ref s,
+#line 2000
+    " + expression + @",
+#line 3000
+    s.ToString());
+
+void M<T>(ref T t1, [InterpolatedStringHandlerArgument(""t1"")] CustomHandler<T> c, T t2) {}
+
+public partial struct CustomHandler<T>
+{
+    public CustomHandler(int literalLength, int formattedCount, [MaybeNull] ref T t " + (validityParameter ? ", out bool success" : "") + @") : this()
+    {
+        " + (validityParameter ? "success = true;" : "") + @"
+    }
+}
+", GetInterpolatedStringCustomHandlerType("CustomHandler<T>", "partial struct", useBoolReturns, includeTrailingOutConstructorParameter: validityParameter), InterpolatedStringHandlerArgumentAttribute, MaybeNullAttributeDefinition },
+            parseOptions: TestOptions.RegularPreview);
+
+            // https://github.com/dotnet/roslyn/issues/54583
+            // Should be a warning on `s.ToString()`
+            c.VerifyDiagnostics(
+                // (1000,9): warning CS8601: Possible null reference assignment.
+                //     ref s,
+                Diagnostic(ErrorCode.WRN_NullReferenceAssignment, "s").WithLocation(1000, 9)
+            );
+        }
+
+        [Theory]
+        [CombinatorialData]
+        public void StringInterpolation_04(bool useBoolReturns, bool validityParameter, [CombinatorialValues(@"$""""", @"$"""" + $""""")] string expression)
+        {
+            CSharpCompilation c = CreateCompilation(new[] { @"
+using System.Runtime.CompilerServices;
+#nullable enable
+
+string? s = null;
+M(s, " + expression + @");
+
+void M(string? s1, [InterpolatedStringHandlerArgument(""s1"")] CustomHandler c) {}
+
+public partial struct CustomHandler
+{
+    public CustomHandler(int literalLength, int formattedCount, string s" + (validityParameter ? ", out bool success" : "") + @") : this()
+    {
+        " + (validityParameter ? "success = true;" : "") + @"
+    }
+}
+", GetInterpolatedStringCustomHandlerType("CustomHandler", "partial struct", useBoolReturns, includeTrailingOutConstructorParameter: validityParameter), InterpolatedStringHandlerArgumentAttribute },
+            parseOptions: TestOptions.RegularPreview);
+
+            // https://github.com/dotnet/roslyn/issues/54583
+            // Should be a warning for the constructor parameter
+            c.VerifyDiagnostics(
+            );
+        }
+
+        [Theory]
+        [CombinatorialData]
+        public void StringInterpolation_05(bool useBoolReturns, bool validityParameter, [CombinatorialValues(@"$""{s}""", @"$""{s}"" + $""""")] string expression)
+        {
+            CSharpCompilation c = CreateCompilation(new[] { @"
+using System.Runtime.CompilerServices;
+#nullable enable
+
+string? s = null;
+M(" + expression + @");
+
+void M(CustomHandler c) {}
+
+[InterpolatedStringHandler]
+public partial struct CustomHandler
+{
+    public CustomHandler(int literalLength, int formattedCount" + (validityParameter ? ", out bool success" : "") + @") : this()
+    {
+        " + (validityParameter ? "success = true;" : "") + @"
+    }
+
+    public " + (useBoolReturns ? "bool" : "void") + @" AppendFormatted(object o)
+    {
+        return " + (useBoolReturns ? "true" : "") + @";
+    }
+}
+", InterpolatedStringHandlerAttribute },
+            parseOptions: TestOptions.RegularPreview);
+
+            c.VerifyDiagnostics(
+                // (6,6): warning CS8604: Possible null reference argument for parameter 'o' in 'void CustomHandler.AppendFormatted(object o)'.
+                // M($"{s}");
+                Diagnostic(ErrorCode.WRN_NullReferenceArgument, "s").WithArguments("o", (useBoolReturns ? "bool" : "void") + " CustomHandler.AppendFormatted(object o)").WithLocation(6, 6)
+            );
+        }
+
+        [Theory]
+        [CombinatorialData]
+        public void StringInterpolation_06(bool useBoolReturns, bool validityParameter, [CombinatorialValues(@"$""{s = null}{s = """"}""", @"$""{s = null}"" + $""{s = """"}""")] string expression)
+        {
+            CSharpCompilation c = CreateCompilation(new[] { @"
+using System.Runtime.CompilerServices;
+#nullable enable
+
+string? s = """";
+M(" + expression + @");
+_ = s.ToString();
+
+void M(CustomHandler c) {}
+
+[InterpolatedStringHandler]
+public partial struct CustomHandler
+{
+    public CustomHandler(int literalLength, int formattedCount" + (validityParameter ? ", out bool success" : "") + @") : this()
+    {
+        " + (validityParameter ? "success = true;" : "") + @"
+    }
+
+    public " + (useBoolReturns ? "bool" : "void") + @" AppendFormatted(object? o)
+    {
+        return " + (useBoolReturns ? "true" : "") + @";
+    }
+}
+", InterpolatedStringHandlerAttribute },
+            parseOptions: TestOptions.RegularPreview);
+
+            if (useBoolReturns)
+            {
+                c.VerifyDiagnostics(
+                    // (7,5): warning CS8602: Dereference of a possibly null reference.
+                    // _ = s.ToString();
+                    Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "s").WithLocation(7, 5)
+                );
+            }
+            else
+            {
+                c.VerifyDiagnostics(
+                );
+            }
+        }
+
+        [Theory]
+        [CombinatorialData]
+        public void StringInterpolation_07(bool useBoolReturns, bool validityParameter,
+            [CombinatorialValues(@"$""{s1 = null}{s2 = null}{s3 = null}{s1 = """"}{s2 = """"}{s3 = """"}""",
+                                 @"$""{s1 = null}"" + $""{s2 = null}"" + $""{s3 = null}"" + $""{s1 = """"}"" + $""{s2 = """"}"" + $""{s3 = """"}""")] string expression)
+        {
+            CSharpCompilation c = CreateCompilation(new[] { @"
+using System.Runtime.CompilerServices;
+#nullable enable
+
+string? s1 = """";
+string? s2 = """";
+string? s3 = """";
+M(" + expression + @");
+_ = s1.ToString();
+_ = s2.ToString();
+_ = s3.ToString();
+
+void M(CustomHandler c) {}
+
+[InterpolatedStringHandler]
+public partial struct CustomHandler
+{
+    public CustomHandler(int literalLength, int formattedCount" + (validityParameter ? ", out bool success" : "") + @") : this()
+    {
+        " + (validityParameter ? "success = true;" : "") + @"
+    }
+
+    public " + (useBoolReturns ? "bool" : "void") + @" AppendFormatted(object? o)
+    {
+        return " + (useBoolReturns ? "true" : "") + @";
+    }
+}
+", InterpolatedStringHandlerAttribute },
+            parseOptions: TestOptions.RegularPreview);
+
+            if (useBoolReturns)
+            {
+                c.VerifyDiagnostics(
+                    // (9,5): warning CS8602: Dereference of a possibly null reference.
+                    // _ = s1.ToString();
+                    Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "s1").WithLocation(9, 5),
+                    // (10,5): warning CS8602: Dereference of a possibly null reference.
+                    // _ = s2.ToString();
+                    Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "s2").WithLocation(10, 5),
+                    // (11,5): warning CS8602: Dereference of a possibly null reference.
+                    // _ = s3.ToString();
+                    Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "s3").WithLocation(11, 5)
+                );
+            }
+            else
+            {
+                c.VerifyDiagnostics();
+            }
         }
 
         [Fact]
@@ -81270,11 +81545,14 @@ class Program
         z.F/*T:object!*/.ToString();
     }
 }";
-            var comp = CreateCompilation(source, options: WithNullableEnable());
+            var comp = CreateCompilation(source, parseOptions: TestOptions.Regular9, options: WithNullableEnable());
             comp.VerifyDiagnostics(
-                // (5,14): error CS0568: Structs cannot contain explicit parameterless constructors
+                // (5,14): error CS8773: Feature 'parameterless struct constructors' is not available in C# 9.0. Please use language version 10.0 or greater.
                 //     internal S() { F = default!; }
-                Diagnostic(ErrorCode.ERR_StructsCantContainDefaultConstructor, "S").WithLocation(5, 14),
+                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion9, "S").WithArguments("parameterless struct constructors", "10.0").WithLocation(5, 14),
+                // (5,14): error CS8938: The parameterless struct constructor must be 'public'.
+                //     internal S() { F = default!; }
+                Diagnostic(ErrorCode.ERR_NonPublicParameterlessStructConstructor, "S").WithLocation(5, 14),
                 // (13,9): warning CS8602: Dereference of a possibly null reference.
                 //         x.F/*T:object?*/.ToString(); // 1
                 Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x.F").WithLocation(13, 9));
