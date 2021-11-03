@@ -5,7 +5,7 @@
     <OutputType>Library</OutputType>
     <RootNamespace>Microsoft.CodeAnalysis.CSharp</RootNamespace>
     <TargetFrameworks>netcoreapp3.1;netstandard2.0</TargetFrameworks>
-    <ApplyNgenOptimization>partial</ApplyNgenOptimization>
+    <ApplyNgenOptimization Condition="'$(TargetFramework)' == 'netstandard2.0'">full</ApplyNgenOptimization>
 
     <!-- NuGet -->
     <IsPackable>true</IsPackable>
@@ -59,6 +59,11 @@
     <Compile Include="..\..\..\Compilers\CSharp\Portable\Syntax\LambdaUtilities.cs">
       <Link>InternalUtilities\LambdaUtilities.cs</Link>
     </Compile>
+  </ItemGroup>
+  <ItemGroup Condition="'$(DotNetBuildFromSource)' == 'true'">
+    <Compile Remove="EditAndContinue\**\*.cs" />
+    <Compile Include="EditAndContinue\BreakpointSpans.cs" />
+    <Compile Include="EditAndContinue\SyntaxUtilities.cs" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Update="CSharpFeaturesResources.resx" GenerateSource="true" />
