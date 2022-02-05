@@ -494,7 +494,7 @@ namespace Microsoft.CodeAnalysis.Internal.Log
         DependentTypeFinder_FindAndCacheImplementingTypesAsync = 432,
 
         RemoteSemanticClassificationCacheService_ExceptionInCacheRead = 440,
-        FeatureNotAvailable = 441,
+        // obsolete: FeatureNotAvailable = 441,
 
         LSPCompletion_MissingLSPCompletionTriggerKind = 450,
         LSPCompletion_MissingLSPCompletionInvokeKind = 451,
@@ -534,5 +534,10 @@ namespace Microsoft.CodeAnalysis.Internal.Log
         NavigateTo_CacheItemsMiss = 510,
 
         AssetService_Perf = 520,
+
+        Inline_Hints_DoubleClick = 530,
+        NavigateToExternalSources = 531,
+
+        StackTraceToolWindow_ShowOnActivated = 540,
     }
 }

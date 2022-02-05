@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis.ErrorReporting;
 using Microsoft.CodeAnalysis.LanguageServer.Handler;
+using Microsoft.CodeAnalysis.LanguageServer.Handler.Diagnostics.Experimental;
 using Microsoft.CodeAnalysis.Options;
 using Microsoft.CodeAnalysis.Shared.TestHooks;
 using Microsoft.VisualStudio.LanguageServer.Protocol;
@@ -31,16 +32,6 @@ namespace Microsoft.CodeAnalysis.LanguageServer
         protected readonly ILspLogger Logger;
         protected readonly string? ClientName;
 
-        /// <summary>
-        /// Server name used when sending error messages to the client.
-        /// </summary>
-        private readonly string _userVisibleServerName;
-
-        /// <summary>
-        /// Server name used when capturing error telemetry.
-        /// </summary>
-        protected readonly string TelemetryServerName;
-
         // Set on first LSP initialize request.
         protected ClientCapabilities? _clientCapabilities;
 
@@ -61,11 +52,10 @@ namespace Microsoft.CodeAnalysis.LanguageServer
             ILspLogger logger,
             ImmutableArray<string> supportedLanguages,
             string? clientName,
-            string userVisibleServerName,
-            string telemetryServerTypeName)
+            WellKnownLspServerKinds serverKind)
         {
             GlobalOptions = globalOptions;
-            RequestDispatcher = requestDispatcherFactory.CreateRequestDispatcher(supportedLanguages);
+            RequestDispatcher = requestDispatcherFactory.CreateRequestDispatcher(supportedLanguages, serverKind);
 
             _capabilitiesProvider = capabilitiesProvider;
             WorkspaceRegistrationService = workspaceRegistrationService;
@@ -78,10 +68,13 @@ namespace Microsoft.CodeAnalysis.LanguageServer
             Listener = listenerProvider.GetListener(FeatureAttribute.LanguageServer);
             ClientName = clientName;
 
-            _userVisibleServerName = userVisibleServerName;
-            TelemetryServerName = telemetryServerTypeName;
-
-            Queue = new RequestExecutionQueue(logger, workspaceRegistrationService, lspMiscellaneousFilesWorkspace, globalOptions, supportedLanguages, userVisibleServerName, TelemetryServerName);
+            Queue = new RequestExecutionQueue(
+                logger,
+                workspaceRegistrationService,
+                lspMiscellaneousFilesWorkspace,
+                globalOptions,
+                supportedLanguages,
+                serverKind);
             Queue.RequestServerShutdown += RequestExecutionQueue_Errored;
         }
 
@@ -132,7 +125,7 @@ namespace Microsoft.CodeAnalysis.LanguageServer
             }
         }
 
-        protected virtual void ShutdownImpl()
+        protected void ShutdownImpl()
         {
             Contract.ThrowIfTrue(_shuttingDown, "Shutdown has already been called.");
 
@@ -376,6 +369,22 @@ namespace Microsoft.CodeAnalysis.LanguageServer
 
             return RequestDispatcher.ExecuteRequestAsync<DidCloseTextDocumentParams, object?>(Queue, Methods.TextDocumentDidCloseName,
                 didCloseParams, _clientCapabilities, ClientName, cancellationToken);
+        }
+
+        [JsonRpcMethod(ExperimentalMethods.TextDocumentDiagnostic, UseSingleObjectParameterDeserialization = true)]
+        public Task<SumType<FullDocumentDiagnosticReport, UnchangedDocumentDiagnosticReport>?> HandleDocumentDiagnosticsAsync(DocumentDiagnosticParams documentDiagnosticParams, CancellationToken cancellationToken)
+        {
+            Contract.ThrowIfNull(_clientCapabilities, $"{nameof(InitializeAsync)} has not been called.");
+            return RequestDispatcher.ExecuteRequestAsync<DocumentDiagnosticParams, SumType<FullDocumentDiagnosticReport, UnchangedDocumentDiagnosticReport>?>(Queue, ExperimentalMethods.TextDocumentDiagnostic,
+                documentDiagnosticParams, _clientCapabilities, ClientName, cancellationToken);
+        }
+
+        [JsonRpcMethod(ExperimentalMethods.WorkspaceDiagnostic, UseSingleObjectParameterDeserialization = true)]
+        public Task<WorkspaceDiagnosticReport?> HandleWorkspaceDiagnosticsAsync(WorkspaceDiagnosticParams workspaceDiagnosticParams, CancellationToken cancellationToken)
+        {
+            Contract.ThrowIfNull(_clientCapabilities, $"{nameof(InitializeAsync)} has not been called.");
+            return RequestDispatcher.ExecuteRequestAsync<WorkspaceDiagnosticParams, WorkspaceDiagnosticReport?>(Queue, ExperimentalMethods.WorkspaceDiagnostic,
+                workspaceDiagnosticParams, _clientCapabilities, ClientName, cancellationToken);
         }
 
         private void ShutdownRequestQueue()
