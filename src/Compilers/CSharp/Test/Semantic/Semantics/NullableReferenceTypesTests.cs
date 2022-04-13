@@ -47684,7 +47684,7 @@ class CL1
                 Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x1").WithLocation(11, 15));
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.IfConditionalConstant" />.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.IfConditionalConstant" />.</remarks>
         [Theory]
         [InlineData("true", "false")]
         [InlineData("FIELD_TRUE", "FIELD_FALSE")]
@@ -47805,7 +47805,7 @@ class C
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.IfConditionalConstant" />.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.IfConditionalConstant" />.</remarks>
         [Theory]
         [InlineData("true", "false")]
         [InlineData("FIELD_TRUE", "FIELD_FALSE")]
@@ -47926,7 +47926,7 @@ class C
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.IfConditional_ComplexCondition_ConstantConsequence" /></remarks>
+        // <remarks>Ported from <see cref="FlowTests.IfConditional_ComplexCondition_ConstantConsequence" /></remarks>
         [Fact]
         public void IfConditional_ComplexCondition_ConstantConsequence()
         {
@@ -48469,7 +48469,7 @@ class C
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_01"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_01"/>.</remarks>
         [Theory]
         [InlineData("b")]
         [InlineData("true")]
@@ -48526,7 +48526,7 @@ class C
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_02"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_02"/>.</remarks>
         [Theory]
         [InlineData("i")]
         [InlineData("42")]
@@ -48582,7 +48582,7 @@ class C
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_03"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_03"/>.</remarks>
         [Theory]
         [InlineData("object?")]
         [InlineData("int?")]
@@ -48639,7 +48639,7 @@ class C
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_04"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_04"/>.</remarks>
         [Theory]
         [InlineData("bool", "false")]
         [InlineData("int", "1")]
@@ -48696,7 +48696,7 @@ class C
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_04"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_04"/>.</remarks>
         [Fact]
         public void EqualsCondAccess_04_02()
         {
@@ -48762,7 +48762,7 @@ class C
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_04"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_04"/>.</remarks>
         [Fact]
         public void EqualsCondAccess_04_03()
         {
@@ -48819,7 +48819,7 @@ class C
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_04"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_04"/>.</remarks>
         [Fact]
         public void EqualsCondAccess_04_04()
         {
@@ -48853,7 +48853,7 @@ class C
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_05"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_05"/>.</remarks>
         [Fact]
         public void EqualsCondAccess_05()
         {
@@ -48892,7 +48892,7 @@ class C
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_06"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_06"/>.</remarks>
         [Fact]
         public void EqualsCondAccess_06()
         {
@@ -48916,7 +48916,7 @@ class C
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_07"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_07"/>.</remarks>
         [Fact]
         public void EqualsCondAccess_07()
         {
@@ -48975,7 +48975,7 @@ struct S
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_08"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_08"/>.</remarks>
         [Fact]
         public void EqualsCondAccess_08()
         {
@@ -49036,7 +49036,7 @@ struct S
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_09"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_09"/>.</remarks>
         [Fact]
         public void EqualsCondAccess_09()
         {
@@ -49107,7 +49107,7 @@ struct S
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_10"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_10"/>.</remarks>
         [Theory]
         [InlineData("S? left, S? right")]
         [InlineData("S? left, S right")]
@@ -49148,7 +49148,7 @@ struct S
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_11"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_11"/>.</remarks>
         [Fact]
         public void EqualsCondAccess_11()
         {
@@ -49211,7 +49211,7 @@ struct S
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_12"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_12"/>.</remarks>
         [Fact]
         public void EqualsCondAccess_12()
         {
@@ -49258,7 +49258,7 @@ class C
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_13"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_13"/>.</remarks>
         [Fact]
         public void EqualsCondAccess_13()
         {
@@ -49281,7 +49281,7 @@ class C
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_14"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_14"/>.</remarks>
         [Fact]
         public void EqualsCondAccess_14()
         {
@@ -49332,7 +49332,7 @@ class C
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_15"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_15"/>.</remarks>
         [Fact]
         public void EqualsCondAccess_15()
         {
@@ -49355,7 +49355,7 @@ class C
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_16"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_16"/>.</remarks>
         [Fact]
         public void EqualsCondAccess_16()
         {
@@ -49374,7 +49374,7 @@ class C
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_17"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_17"/>.</remarks>
         [Fact]
         public void EqualsCondAccess_17()
         {
@@ -49400,7 +49400,7 @@ class C
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_18"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_18"/>.</remarks>
         [Fact]
         public void EqualsCondAccess_18()
         {
@@ -49459,7 +49459,7 @@ class C
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_19"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_19"/>.</remarks>
         [Fact]
         public void EqualsCondAccess_19()
         {
@@ -49554,7 +49554,7 @@ class C
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.IsCondAccess_01"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.IsCondAccess_01"/>.</remarks>
         [Fact]
         public void IsCondAccess_01()
         {
@@ -49588,7 +49588,7 @@ class C
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.IsCondAccess_02"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.IsCondAccess_02"/>.</remarks>
         [Fact]
         public void IsCondAccess_02()
         {
@@ -49682,7 +49682,7 @@ class C
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.IsCondAccess_03"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.IsCondAccess_03"/>.</remarks>
         [Fact]
         public void IsCondAccess_03()
         {
@@ -49752,7 +49752,7 @@ class C
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.IsCondAccess_04"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.IsCondAccess_04"/>.</remarks>
         [Fact]
         public void IsCondAccess_04()
         {
@@ -49838,7 +49838,7 @@ class C
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.IsCondAccess_05"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.IsCondAccess_05"/>.</remarks>
         [Theory]
         [InlineData("int")]
         [InlineData("int?")]
@@ -49914,7 +49914,7 @@ class C
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.IsCondAccess_06"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.IsCondAccess_06"/>.</remarks>
         [Fact]
         public void IsCondAccess_06()
         {
@@ -49938,7 +49938,7 @@ class C
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.IsCondAccess_07"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.IsCondAccess_07"/>.</remarks>
         [Fact]
         public void IsCondAccess_07()
         {
@@ -49972,7 +49972,7 @@ class C
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.IsCondAccess_08"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.IsCondAccess_08"/>.</remarks>
         [Fact]
         public void IsCondAccess_08()
         {
@@ -50007,7 +50007,7 @@ class C
                 );
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.IsCondAccess_09"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.IsCondAccess_09"/>.</remarks>
         [Fact]
         public void IsCondAccess_09()
         {
@@ -50539,7 +50539,7 @@ class C
                 Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "b.C.Prop").WithLocation(16, 13));
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_LeftCondAccess"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.EqualsCondAccess_LeftCondAccess"/>.</remarks>
         [Fact]
         public void EqualsCondAccess_LeftCondAccess()
         {
@@ -51080,7 +51080,7 @@ class C
                 );
         }
 
-        ///<remarks>Ported from <see cref="FlowTests.CondAccess_NullCoalescing_01"/>.</remarks>
+        //<remarks>Ported from <see cref="FlowTests.CondAccess_NullCoalescing_01"/>.</remarks>
         [Fact]
         public void CondAccess_NullCoalescing_01()
         {
@@ -51114,7 +51114,7 @@ class C
                 );
         }
 
-        ///<remarks>Ported from <see cref="FlowTests.CondAccess_NullCoalescing_02"/>.</remarks>
+        //<remarks>Ported from <see cref="FlowTests.CondAccess_NullCoalescing_02"/>.</remarks>
         [Fact]
         public void CondAccess_NullCoalescing_02()
         {
@@ -51148,7 +51148,7 @@ class C
                 );
         }
 
-        ///<remarks>Ported from <see cref="FlowTests.CondAccess_NullCoalescing_03"/>.</remarks>
+        //<remarks>Ported from <see cref="FlowTests.CondAccess_NullCoalescing_03"/>.</remarks>
         [Fact]
         public void CondAccess_NullCoalescing_03()
         {
@@ -51183,7 +51183,7 @@ class C
                 );
         }
 
-        ///<remarks>Ported from <see cref="FlowTests.CondAccess_NullCoalescing_04"/>.</remarks>
+        //<remarks>Ported from <see cref="FlowTests.CondAccess_NullCoalescing_04"/>.</remarks>
         [Fact]
         public void CondAccess_NullCoalescing_04()
         {
@@ -51218,7 +51218,7 @@ class C
                 );
         }
 
-        ///<remarks>Ported from <see cref="FlowTests.CondAccess_NullCoalescing_05"/>.</remarks>
+        //<remarks>Ported from <see cref="FlowTests.CondAccess_NullCoalescing_05"/>.</remarks>
         [Fact]
         public void CondAccess_NullCoalescing_05()
         {
@@ -51256,7 +51256,7 @@ class C
                 );
         }
 
-        ///<remarks>Ported from <see cref="FlowTests.CondAccess_NullCoalescing_06"/>.</remarks>
+        //<remarks>Ported from <see cref="FlowTests.CondAccess_NullCoalescing_06"/>.</remarks>
         [Fact]
         public void CondAccess_NullCoalescing_06()
         {
@@ -51290,7 +51290,7 @@ class C
                 );
         }
 
-        ///<remarks>Ported from <see cref="FlowTests.CondAccess_NullCoalescing_07"/>.</remarks>
+        //<remarks>Ported from <see cref="FlowTests.CondAccess_NullCoalescing_07"/>.</remarks>
         [Fact]
         public void CondAccess_NullCoalescing_07()
         {
@@ -51317,7 +51317,7 @@ class C
                 );
         }
 
-        ///<remarks>Ported from <see cref="FlowTests.CondAccess_NullCoalescing_08"/>.</remarks>
+        //<remarks>Ported from <see cref="FlowTests.CondAccess_NullCoalescing_08"/>.</remarks>
         [Fact]
         public void CondAccess_NullCoalescing_08()
         {
@@ -51361,7 +51361,7 @@ class C
                 );
         }
 
-        ///<remarks>Ported from <see cref="FlowTests.CondAccess_NullCoalescing_09"/>.</remarks>
+        //<remarks>Ported from <see cref="FlowTests.CondAccess_NullCoalescing_09"/>.</remarks>
         [Fact]
         public void CondAccess_NullCoalescing_09()
         {
@@ -51396,7 +51396,7 @@ class C
                 );
         }
 
-        ///<remarks>Ported from <see cref="FlowTests.CondAccess_NullCoalescing_10"/>.</remarks>
+        //<remarks>Ported from <see cref="FlowTests.CondAccess_NullCoalescing_10"/>.</remarks>
         [Fact]
         public void CondAccess_NullCoalescing_10()
         {
@@ -51430,7 +51430,7 @@ class C
                 Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(15, 15));
         }
 
-        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_ConditionalLeft"/>.</remarks>
+        //<remarks>Ported from <see cref="FlowTests.NullCoalescing_ConditionalLeft"/>.</remarks>
         [Fact]
         public void NullCoalescing_ConditionalLeft()
         {
@@ -51478,7 +51478,7 @@ class C
                 );
         }
 
-        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_Throw"/>.</remarks>
+        //<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_Throw"/>.</remarks>
         [Fact]
         public void NullCoalescing_CondAccess_Throw()
         {
@@ -51497,7 +51497,7 @@ class C
             CreateNullableCompilation(source).VerifyDiagnostics();
         }
 
-        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_Cast"/>.</remarks>
+        //<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_Cast"/>.</remarks>
         [Fact]
         public void NullCoalescing_CondAccess_Cast()
         {
@@ -51519,7 +51519,7 @@ class C
                 Diagnostic(ErrorCode.WRN_ConvertingNullableToNonNullable, "(object)c1?.M(x = 0)").WithLocation(6, 13));
         }
 
-        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_01"/>.</remarks>
+        //<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_01"/>.</remarks>
         [Fact]
         public void NullCoalescing_CondAccess_UserDefinedConv_01()
         {
@@ -51546,7 +51546,7 @@ struct C
             CreateNullableCompilation(source).VerifyDiagnostics();
         }
 
-        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_02"/>.</remarks>
+        //<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_02"/>.</remarks>
         [Fact]
         public void NullCoalescing_CondAccess_UserDefinedConv_02()
         {
@@ -51569,7 +51569,7 @@ class C
             CreateNullableCompilation(source).VerifyDiagnostics();
         }
 
-        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_03"/>.</remarks>
+        //<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_03"/>.</remarks>
         [Fact]
         public void NullCoalescing_CondAccess_UserDefinedConv_03()
         {
@@ -51592,7 +51592,7 @@ struct C
             CreateNullableCompilation(source).VerifyDiagnostics();
         }
 
-        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_04"/>.</remarks>
+        //<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_04"/>.</remarks>
         [Fact]
         public void NullCoalescing_CondAccess_UserDefinedConv_04()
         {
@@ -51615,7 +51615,7 @@ struct C
             CreateNullableCompilation(source).VerifyDiagnostics();
         }
 
-        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_05"/>.</remarks>
+        //<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_05"/>.</remarks>
         [Fact]
         public void NullCoalescing_CondAccess_UserDefinedConv_05()
         {
@@ -51640,7 +51640,7 @@ class C
             CreateNullableCompilation(source).VerifyDiagnostics();
         }
 
-        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_01"/>.</remarks>
+        //<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_01"/>.</remarks>
         [Theory]
         [InlineData("explicit")]
         [InlineData("implicit")]
@@ -51673,7 +51673,7 @@ struct C
                 );
         }
 
-        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_01"/>.</remarks>
+        //<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_01"/>.</remarks>
         [Theory]
         [InlineData("explicit")]
         [InlineData("implicit")]
@@ -51711,7 +51711,7 @@ struct C
                 );
         }
 
-        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_02"/>.</remarks>
+        //<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_02"/>.</remarks>
         [Theory]
         [InlineData("explicit")]
         [InlineData("implicit")]
@@ -51739,7 +51739,7 @@ class C
                 Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(10, 9));
         }
 
-        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_02"/>.</remarks>
+        //<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_02"/>.</remarks>
         [Theory]
         [InlineData("explicit")]
         [InlineData("implicit")]
@@ -51767,7 +51767,7 @@ class C
                 Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(10, 9));
         }
 
-        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_02"/>.</remarks>
+        //<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_02"/>.</remarks>
         [Theory]
         [InlineData("explicit")]
         [InlineData("implicit")]
@@ -51798,7 +51798,7 @@ class C
                 Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(13, 9));
         }
 
-        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_02"/>.</remarks>
+        //<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_02"/>.</remarks>
         [Theory]
         [InlineData("explicit")]
         [InlineData("implicit")]
@@ -51829,7 +51829,7 @@ class C
                 Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x").WithLocation(13, 9));
         }
 
-        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_02"/>.</remarks>
+        //<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_02"/>.</remarks>
         [Theory]
         [InlineData("explicit")]
         [InlineData("implicit")]
@@ -51861,7 +51861,7 @@ class C
                 );
         }
 
-        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_03"/>.</remarks>
+        //<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_03"/>.</remarks>
         [Theory]
         [InlineData("explicit")]
         [InlineData("implicit")]
@@ -51886,7 +51886,7 @@ struct C
             CreateNullableCompilation(source).VerifyDiagnostics();
         }
 
-        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_04"/>.</remarks>
+        //<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_04"/>.</remarks>
         [Theory]
         [InlineData("explicit")]
         [InlineData("implicit")]
@@ -51911,7 +51911,7 @@ struct C
             CreateNullableCompilation(source).VerifyDiagnostics();
         }
 
-        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_05"/>.</remarks>
+        //<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_05"/>.</remarks>
         [Theory]
         [InlineData("explicit")]
         [InlineData("implicit")]
@@ -51942,7 +51942,7 @@ class C
                 );
         }
 
-        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_05"/>.</remarks>
+        //<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_UserDefinedConv_05"/>.</remarks>
         [Theory]
         [InlineData("explicit")]
         [InlineData("implicit")]
@@ -51978,7 +51978,7 @@ class C
                 );
         }
 
-        ///<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_NullableEnum"/>.</remarks>
+        //<remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_NullableEnum"/>.</remarks>
         [Fact]
         public void NullCoalescing_CondAccess_NullableEnum()
         {
@@ -51999,7 +51999,7 @@ public static class Extensions
             CreateNullableCompilation(source).VerifyDiagnostics();
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_NonNullConstantLeft"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.NullCoalescing_CondAccess_NonNullConstantLeft"/>.</remarks>
         [Fact]
         public void NullCoalescing_CondAccess_NonNullConstantLeft()
         {
@@ -52029,7 +52029,7 @@ static class C
                 Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "y").WithLocation(17, 30));
         }
 
-        /// <remarks>Ported from <see cref="FlowTests.NullCoalescing_NonNullConstantLeft"/>.</remarks>
+        // <remarks>Ported from <see cref="FlowTests.NullCoalescing_NonNullConstantLeft"/>.</remarks>
         [Fact]
         public void NullCoalescing_NonNullConstantLeft()
         {
@@ -60385,7 +60385,7 @@ struct C2
 
     public C2(C0 x2)
     {
-        x2 = P2; // 3, 4
+        x2 = P2; // 3
         P2 = null;
     }
 }
@@ -60397,7 +60397,7 @@ struct C3
     public C3(C0 x3, C0? y3)
     {
         P3 = y3;
-        x3 = P3; // 5
+        x3 = P3; // 4
     }
 }
 
@@ -60440,13 +60440,10 @@ struct S1
                 //     public C1(C0? x1) // 1
                 Diagnostic(ErrorCode.WRN_UninitializedNonNullableField, "C1").WithArguments("property", "P1").WithLocation(10, 12),
                 // (34,14): warning CS8600: Converting null literal or possible null value to non-nullable type.
-                //         x3 = P3; // 5
+                //         x3 = P3; // 4
                 Diagnostic(ErrorCode.WRN_ConvertingNullableToNonNullable, "P3").WithLocation(34, 14),
-                // (22,14): error CS8079: Use of possibly unassigned auto-implemented property 'P2'
-                //         x2 = P2; // 3, 4
-                Diagnostic(ErrorCode.ERR_UseDefViolationProperty, "P2").WithArguments("P2").WithLocation(22, 14),
                 // (22,14): warning CS8600: Converting null literal or possible null value to non-nullable type.
-                //         x2 = P2; // 3, 4
+                //         x2 = P2; // 3
                 Diagnostic(ErrorCode.WRN_ConvertingNullableToNonNullable, "P2").WithLocation(22, 14)
                 );
         }
@@ -79061,13 +79058,15 @@ struct S
                 Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "P").WithLocation(7, 9));
         }
 
-        [Fact]
-        public void UnassignedStructAutoProperty_Constructor()
+        [Theory]
+        [InlineData("object")]
+        [InlineData("object?")]
+        public void UnassignedStructAutoProperty_Constructor(string propertyType)
         {
             var source =
 @"struct S
 {
-    object? P { get; }
+    " + propertyType + @" P { get; }
     S(out object o)
     {
         o = P;
@@ -79076,12 +79075,6 @@ struct S
 }";
             var comp = CreateCompilation(new[] { source }, options: WithNullableEnable());
             comp.VerifyDiagnostics(
-                // (6,13): error CS8079: Use of possibly unassigned auto-implemented property 'P'
-                //         o = P;
-                Diagnostic(ErrorCode.ERR_UseDefViolationProperty, "P").WithArguments("P").WithLocation(6, 13),
-                // (4,5): error CS0843: Auto-implemented property 'S.P' must be fully assigned before control is returned to the caller.
-                //     S(out object o)
-                Diagnostic(ErrorCode.ERR_UnassignedThisAutoProperty, "S").WithArguments("S.P").WithLocation(4, 5),
                 // (6,13): warning CS8601: Possible null reference assignment.
                 //         o = P;
                 Diagnostic(ErrorCode.WRN_NullReferenceAssignment, "P").WithLocation(6, 13),
@@ -112690,7 +112683,7 @@ interface I2
             compilation2.VerifyEmitDiagnostics();
 
             // Verification against a corlib not named exactly mscorlib is expected to fail.
-            CompileAndVerify(compilation2, verify: Verification.Fails);
+            CompileAndVerify(compilation2, verify: Verification.FailsPEVerify);
 
             Assert.Equal(TypeKind.Struct, compilation2.GetTypeByMetadataName("A").TypeKind);
             Assert.Equal(TypeKind.Enum, compilation2.GetTypeByMetadataName("B").TypeKind);
@@ -112701,7 +112694,7 @@ interface I2
             var compilation3 = CreateEmptyCompilation(source2, options: WithNullableEnable(TestOptions.ReleaseDll), references: new[] { compilation1.ToMetadataReference(), MinCorlibRef });
 
             compilation3.VerifyEmitDiagnostics();
-            CompileAndVerify(compilation3, verify: Verification.Fails);
+            CompileAndVerify(compilation3, verify: Verification.FailsPEVerify);
 
             Assert.Equal(TypeKind.Struct, compilation3.GetTypeByMetadataName("A").TypeKind);
             Assert.Equal(TypeKind.Enum, compilation3.GetTypeByMetadataName("B").TypeKind);
@@ -155947,6 +155940,171 @@ class C
                 // (9,28): warning CS8621: Nullability of reference types in return type of 'ref readonly string? D<string?>.Invoke()' doesn't match the target delegate 'D<string>' (possibly because of nullability attributes).
                 //         D<string> d = new (d2); // 2
                 Diagnostic(ErrorCode.WRN_NullabilityMismatchInReturnTypeOfTargetDelegate, "d2").WithArguments("ref readonly string? D<string?>.Invoke()", "D<string>").WithLocation(9, 28)
+                );
+        }
+
+        [Fact, WorkItem(59336, "https://github.com/dotnet/roslyn/issues/59336")]
+        public void DelegateConversionWithImplicitParameters()
+        {
+            var source = @"
+#nullable enable
+
+public delegate void MyDelegate([System.Diagnostics.CodeAnalysis.MaybeNull] object first, [System.Diagnostics.CodeAnalysis.MaybeNull] object second);
+
+class C
+{
+    public event MyDelegate? MyEvent;
+    void M()
+    {
+        MyEvent += delegate { };
+        MyEvent?.Invoke(new object(), new object());
+    }
+}";
+            var comp = CreateCompilation(new[] { source, MaybeNullAttributeDefinition });
+            comp.VerifyDiagnostics();
+        }
+
+        [Fact, WorkItem(60187, "https://github.com/dotnet/roslyn/issues/60187")]
+        public void DeconstructMethodFromTypeParameter()
+        {
+            string source = @"
+#nullable enable
+interface IDeconstructable<T1, T2>
+{
+    void Deconstruct(out T1 p1, out T2 p2);
+}
+class Program
+{
+    static void M1<TGeneric, T1, T2>(TGeneric generic)
+        where TGeneric : IDeconstructable<T1, T2>
+        where T1 : class
+        where T2 : class?
+    {
+        var (p1, p2) = generic;
+        p1.ToString();
+        p2.ToString(); // 1
+    }
+
+    static void M2<TGeneric>(TGeneric generic) where TGeneric : IDeconstructable<string, string?>
+    {
+        var (p1, p2) = generic;
+        p1.ToString();
+        p2.ToString(); // 2
+    }
+
+    static void M3<TGeneric, T1, T2>(TGeneric generic)
+        where TGeneric : IDeconstructable<T1, T2>
+        where T1 : class
+        where T2 : class?
+    {
+        generic.Deconstruct(out var p1, out var p2);
+        p1.ToString();
+        p2.ToString(); // 3
+    }
+
+    static void M3<TGeneric>(TGeneric generic) where TGeneric : IDeconstructable<string, string?>
+    {
+        generic.Deconstruct(out var p1, out var p2);
+        p1.ToString();
+        p2.ToString(); // 4
+    }
+}
+";
+            var comp = CreateCompilation(source);
+            comp.VerifyDiagnostics(
+                // (16,9): warning CS8602: Dereference of a possibly null reference.
+                //         p2.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "p2").WithLocation(16, 9),
+                // (23,9): warning CS8602: Dereference of a possibly null reference.
+                //         p2.ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "p2").WithLocation(23, 9),
+                // (33,9): warning CS8602: Dereference of a possibly null reference.
+                //         p2.ToString(); // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "p2").WithLocation(33, 9),
+                // (40,9): warning CS8602: Dereference of a possibly null reference.
+                //         p2.ToString(); // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "p2").WithLocation(40, 9)
+                );
+        }
+
+        [Fact, WorkItem(60134, "https://github.com/dotnet/roslyn/issues/60134")]
+        public void Stackalloc_InferredType()
+        {
+            var comp = CreateCompilation(@"
+#nullable enable
+unsafe class C
+{
+	void F()
+	{
+		var a = stackalloc[] { 1, 2L };
+	}
+}
+", options: TestOptions.UnsafeDebugDll);
+
+            comp.VerifyDiagnostics();
+            var tree = comp.SyntaxTrees.Single();
+            var model = comp.GetSemanticModel(tree);
+            var stackallocNode = tree.GetRoot().DescendantNodes().OfType<ImplicitStackAllocArrayCreationExpressionSyntax>().Single();
+            Assert.Equal("System.Int64*", model.GetTypeInfo(stackallocNode).Type.ToTestDisplayString());
+        }
+
+        [Fact, WorkItem(60134, "https://github.com/dotnet/roslyn/issues/60134")]
+        public void Stackalloc_WithReferenceTypes()
+        {
+            var comp = CreateCompilation(@"
+#nullable enable
+unsafe class C
+{
+	void F(object? o)
+	{
+		var a = stackalloc[] { M(o) };
+        a[0].ToString();
+        a[0].Item.ToString();
+	}
+    static D<T> M<T>(T t) => throw null!;
+}
+struct D<T>
+{
+    public T Item;
+}
+", options: TestOptions.UnsafeDebugDll);
+
+            comp.VerifyDiagnostics(
+                // (7,11): error CS0208: Cannot take the address of, get the size of, or declare a pointer to a managed type ('D<object>')
+                // 		var a = stackalloc[] { M(o) };
+                Diagnostic(ErrorCode.ERR_ManagedAddr, "stackalloc[] { M(o) }").WithArguments("D<object>").WithLocation(7, 11),
+                // (15,14): warning CS0649: Field 'D<T>.Item' is never assigned to, and will always have its default value
+                //     public T Item;
+                Diagnostic(ErrorCode.WRN_UnassignedInternalField, "Item").WithArguments("D<T>.Item", "").WithLocation(15, 14)
+                );
+        }
+
+        [Fact, WorkItem(60134, "https://github.com/dotnet/roslyn/issues/60134")]
+        public void Stackalloc_VariousErrors()
+        {
+            var comp = CreateCompilation(@"
+#nullable enable
+unsafe class C
+{
+	void F(object? o)
+	{
+        var s0 = stackalloc[] { };
+        var s1 = stackalloc[] { null };
+        var s2 = stackalloc[] { x => x };
+	}
+}
+", options: TestOptions.UnsafeDebugDll);
+
+            comp.VerifyDiagnostics(
+                // (7,18): error CS0826: No best type found for implicitly-typed array
+                //         var s0 = stackalloc[] { };
+                Diagnostic(ErrorCode.ERR_ImplicitlyTypedArrayNoBestType, "stackalloc[] { }").WithLocation(7, 18),
+                // (8,18): error CS0826: No best type found for implicitly-typed array
+                //         var s1 = stackalloc[] { null };
+                Diagnostic(ErrorCode.ERR_ImplicitlyTypedArrayNoBestType, "stackalloc[] { null }").WithLocation(8, 18),
+                // (9,18): error CS0826: No best type found for implicitly-typed array
+                //         var s2 = stackalloc[] { x => x };
+                Diagnostic(ErrorCode.ERR_ImplicitlyTypedArrayNoBestType, "stackalloc[] { x => x }").WithLocation(9, 18)
                 );
         }
     }

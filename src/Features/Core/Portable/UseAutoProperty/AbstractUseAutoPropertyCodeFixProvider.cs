@@ -85,8 +85,10 @@ namespace Microsoft.CodeAnalysis.UseAutoProperty
             var project = fieldDocument.Project;
             var compilation = await project.GetRequiredCompilationAsync(cancellationToken).ConfigureAwait(false);
 
+            var renameOptions = new SymbolRenameOptions();
+
             var fieldLocations = await Renamer.FindRenameLocationsAsync(
-                solution, fieldSymbol, RenameOptionSet.From(solution), cancellationToken).ConfigureAwait(false);
+                solution, fieldSymbol, renameOptions, cancellationToken).ConfigureAwait(false);
 
             // First, create the updated property we want to replace the old property with
             var isWrittenToOutsideOfConstructor = IsWrittenToOutsideOfConstructorOrProperty(fieldSymbol, fieldLocations, property, cancellationToken);
@@ -340,13 +342,21 @@ namespace Microsoft.CodeAnalysis.UseAutoProperty
 
         private class UseAutoPropertyCodeAction : CustomCodeActions.SolutionChangeAction
         {
-            public UseAutoPropertyCodeAction(string title, Func<CancellationToken, Task<Solution>> createChangedSolution, CodeActionPriority priority)
+            public UseAutoPropertyCodeAction(string title, Func<CancellationToken, Task<Solution>> createChangedSolution
+#if !CODE_STYLE // 'CodeActionPriority' is not a public API, hence not supported in CodeStyle layer.
+                , CodeActionPriority priority
+#endif
+                )
                 : base(title, createChangedSolution, title)
             {
+#if !CODE_STYLE // 'CodeActionPriority' is not a public API, hence not supported in CodeStyle layer.
                 Priority = priority;
+#endif
             }
 
+#if !CODE_STYLE // 'CodeActionPriority' is not a public API, hence not supported in CodeStyle layer.
             internal override CodeActionPriority Priority { get; }
+#endif
         }
     }
 }

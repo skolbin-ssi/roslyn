@@ -7,7 +7,6 @@
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.CodeAnalysis.Editor.FindUsages;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.FindUsages;
 using Microsoft.CodeAnalysis.Shared.Utilities;
@@ -37,9 +36,8 @@ namespace Microsoft.CodeAnalysis.Remote
             FindReferencesSearchOptions options,
             CancellationToken cancellationToken)
         {
-            return RunServiceAsync(async cancellationToken =>
+            return RunServiceAsync(solutionInfo, async solution =>
             {
-                var solution = await GetSolutionAsync(solutionInfo, cancellationToken).ConfigureAwait(false);
                 var project = solution.GetProject(symbolAndProjectId.ProjectId);
 
                 var symbol = await symbolAndProjectId.TryRehydrateAsync(
@@ -60,9 +58,8 @@ namespace Microsoft.CodeAnalysis.Remote
             SerializableSymbolAndProjectId symbolAndProjectId,
             CancellationToken cancellationToken)
         {
-            return RunServiceAsync(async cancellationToken =>
+            return RunServiceAsync(solutionInfo, async solution =>
             {
-                var solution = await GetSolutionAsync(solutionInfo, cancellationToken).ConfigureAwait(false);
                 var project = solution.GetProject(symbolAndProjectId.ProjectId);
 
                 var symbol = await symbolAndProjectId.TryRehydrateAsync(
@@ -72,7 +69,7 @@ namespace Microsoft.CodeAnalysis.Remote
 
                 var context = new RemoteFindUsageContext(_callback, callbackId);
                 await AbstractFindUsagesService.FindImplementationsAsync(
-                    symbol, project, context, cancellationToken).ConfigureAwait(false);
+                    context, symbol, project, cancellationToken).ConfigureAwait(false);
             }, cancellationToken);
         }
 
@@ -101,6 +98,9 @@ namespace Microsoft.CodeAnalysis.Remote
             #region IFindUsagesContext
 
             public IStreamingProgressTracker ProgressTracker => this;
+
+            public ValueTask<FindUsagesOptions> GetOptionsAsync(string language, CancellationToken cancellationToken)
+                => _callback.InvokeAsync((callback, cancellationToken) => callback.GetOptionsAsync(_callbackId, language, cancellationToken), cancellationToken);
 
             public ValueTask ReportMessageAsync(string message, CancellationToken cancellationToken)
                 => _callback.InvokeAsync((callback, cancellationToken) => callback.ReportMessageAsync(_callbackId, message, cancellationToken), cancellationToken);

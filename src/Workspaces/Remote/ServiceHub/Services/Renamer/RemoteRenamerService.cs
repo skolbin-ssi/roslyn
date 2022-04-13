@@ -28,14 +28,12 @@ namespace Microsoft.CodeAnalysis.Remote
             PinnedSolutionInfo solutionInfo,
             SerializableSymbolAndProjectId symbolAndProjectId,
             string newName,
-            SerializableRenameOptionSet options,
+            SymbolRenameOptions options,
             ImmutableArray<SerializableSymbolAndProjectId> nonConflictSymbolIds,
             CancellationToken cancellationToken)
         {
-            return RunServiceAsync(async cancellationToken =>
+            return RunServiceAsync(solutionInfo, async solution =>
             {
-                var solution = await GetSolutionAsync(solutionInfo, cancellationToken).ConfigureAwait(false);
-
                 var symbol = await symbolAndProjectId.TryRehydrateAsync(
                     solution, cancellationToken).ConfigureAwait(false);
 
@@ -45,7 +43,7 @@ namespace Microsoft.CodeAnalysis.Remote
                 var nonConflictSymbols = await GetNonConflictSymbolsAsync(solution, nonConflictSymbolIds, cancellationToken).ConfigureAwait(false);
 
                 var result = await Renamer.RenameSymbolAsync(
-                    solution, symbol, newName, options.Rehydrate(),
+                    solution, symbol, newName, options,
                     nonConflictSymbols, cancellationToken).ConfigureAwait(false);
                 return await result.DehydrateAsync(cancellationToken).ConfigureAwait(false);
             }, cancellationToken);
@@ -54,13 +52,11 @@ namespace Microsoft.CodeAnalysis.Remote
         public ValueTask<SerializableRenameLocations?> FindRenameLocationsAsync(
             PinnedSolutionInfo solutionInfo,
             SerializableSymbolAndProjectId symbolAndProjectId,
-            SerializableRenameOptionSet options,
+            SymbolRenameOptions options,
             CancellationToken cancellationToken)
         {
-            return RunServiceAsync(async cancellationToken =>
+            return RunServiceAsync(solutionInfo, async solution =>
             {
-                var solution = await GetSolutionAsync(solutionInfo, cancellationToken).ConfigureAwait(false);
-
                 var symbol = await symbolAndProjectId.TryRehydrateAsync(
                     solution, cancellationToken).ConfigureAwait(false);
 
@@ -68,7 +64,7 @@ namespace Microsoft.CodeAnalysis.Remote
                     return null;
 
                 var result = await RenameLocations.FindLocationsAsync(
-                    symbol, solution, options.Rehydrate(), cancellationToken).ConfigureAwait(false);
+                    symbol, solution, options, cancellationToken).ConfigureAwait(false);
                 return result.Dehydrate(solution, cancellationToken);
             }, cancellationToken);
         }
@@ -80,9 +76,8 @@ namespace Microsoft.CodeAnalysis.Remote
             ImmutableArray<SerializableSymbolAndProjectId> nonConflictSymbolIds,
             CancellationToken cancellationToken)
         {
-            return RunServiceAsync(async cancellationToken =>
+            return RunServiceAsync(solutionInfo, async solution =>
             {
-                var solution = await GetSolutionAsync(solutionInfo, cancellationToken).ConfigureAwait(false);
                 var nonConflictSymbols = await GetNonConflictSymbolsAsync(solution, nonConflictSymbolIds, cancellationToken).ConfigureAwait(false);
 
                 var rehydratedSet = await RenameLocations.TryRehydrateAsync(solution, renameLocationSet, cancellationToken).ConfigureAwait(false);
