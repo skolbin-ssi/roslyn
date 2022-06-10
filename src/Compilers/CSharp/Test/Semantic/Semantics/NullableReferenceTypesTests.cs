@@ -1115,7 +1115,7 @@ public class C
             comp.VerifyDiagnostics(
                 // (7,23): error CS1003: Syntax error, ',' expected
                 //         M(out string y!);
-                Diagnostic(ErrorCode.ERR_SyntaxError, "!").WithArguments(",", "!").WithLocation(7, 23),
+                Diagnostic(ErrorCode.ERR_SyntaxError, "!").WithArguments(",").WithLocation(7, 23),
                 // (7,24): error CS1525: Invalid expression term ')'
                 //         M(out string y!);
                 Diagnostic(ErrorCode.ERR_InvalidExprTerm, ")").WithArguments(")").WithLocation(7, 24)
@@ -2686,7 +2686,7 @@ class C
                 Diagnostic(ErrorCode.ERR_NameNotInContext, "nameof").WithArguments("nameof").WithLocation(6, 13),
                 // (7,19): error CS1003: Syntax error, '(' expected
                 //         _ = typeof!(C);
-                Diagnostic(ErrorCode.ERR_SyntaxError, "!").WithArguments("(", "!").WithLocation(7, 19),
+                Diagnostic(ErrorCode.ERR_SyntaxError, "!").WithArguments("(").WithLocation(7, 19),
                 // (7,19): error CS1031: Type expected
                 //         _ = typeof!(C);
                 Diagnostic(ErrorCode.ERR_TypeExpected, "!").WithLocation(7, 19),
@@ -3133,12 +3133,13 @@ struct S<T>
 
             void verify(string variableType, string itemType, params DiagnosticDescription[] expected)
             {
-                var source = @"
+                var source = $$"""
+
 class C<T>
 {
     void M(RefEnumerable collection)
     {
-        foreach (ref VARTYPE item in collection)
+        foreach (ref {{variableType}} item in collection)
         {
             item.ToString();
         }
@@ -3149,13 +3150,14 @@ class C<T>
         public StructEnum GetEnumerator() => throw null!;
         public struct StructEnum
         {
-            public ref ITEMTYPE Current => throw null!;
+            public ref {{itemType}} Current => throw null!;
             public bool MoveNext() => throw null!;
         }
     }
-}";
+}
+""";
 
-                var comp = CreateCompilation(source.Replace("VARTYPE", variableType).Replace("ITEMTYPE", itemType), options: WithNullableEnable());
+                var comp = CreateCompilation(source, options: WithNullableEnable());
                 comp.VerifyDiagnostics(expected);
             }
         }
@@ -15217,7 +15219,7 @@ class C : B, A
                 Diagnostic(ErrorCode.WRN_TopLevelNullabilityMismatchInParameterTypeOnImplicitImplementation, "set").WithArguments("value", "void C.P1.set", "void A.P1.set").WithLocation(15, 39),
                 // (16,39): error CS8051: Auto-implemented properties must have get accessors.
                 //     public override Func<object> P2 { set; } // warn
-                Diagnostic(ErrorCode.ERR_AutoPropertyMustHaveGetAccessor, "set").WithArguments("C.P2.set").WithLocation(16, 39),
+                Diagnostic(ErrorCode.ERR_AutoPropertyMustHaveGetAccessor, "set").WithLocation(16, 39),
                 // (16,39): warning CS8610: Nullability of reference types in type of parameter 'value' doesn't match overridden member.
                 //     public override Func<object> P2 { set; } // warn
                 Diagnostic(ErrorCode.WRN_NullabilityMismatchInParameterTypeOnOverride, "set").WithArguments("value").WithLocation(16, 39),
@@ -15429,7 +15431,7 @@ class D : C, B
             comp.VerifyDiagnostics(
                 // (16,35): error CS8080: Auto-implemented properties must override all accessors of the overridden property.
                 //     public override Func<object>? P1 { get; } = null!; // warn
-                Diagnostic(ErrorCode.ERR_AutoPropertyMustOverrideSet, "P1").WithArguments("D.P1").WithLocation(16, 35),
+                Diagnostic(ErrorCode.ERR_AutoPropertyMustOverrideSet, "P1").WithLocation(16, 35),
                 // (16,40): warning CS8764: Nullability of return type doesn't match overridden member (possibly because of nullability attributes).
                 //     public override Func<object>? P1 { get; } = null!; // warn
                 Diagnostic(ErrorCode.WRN_TopLevelNullabilityMismatchInReturnTypeOnOverride, "get").WithLocation(16, 40),
@@ -33536,7 +33538,7 @@ class C
                 Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "field").WithLocation(12, 9),
                 // (14,15): error CS0206: A property or indexer may not be passed as an out or ref parameter
                 //         M(ref Property); // 5
-                Diagnostic(ErrorCode.ERR_RefProperty, "Property").WithArguments("C.Property").WithLocation(14, 15),
+                Diagnostic(ErrorCode.ERR_RefProperty, "Property").WithLocation(14, 15),
                 // (15,20): warning CS8625: Cannot convert null literal to non-nullable reference type.
                 //         Property = null; // 6
                 Diagnostic(ErrorCode.WRN_NullAsNonNullable, "null").WithLocation(15, 20)
@@ -63302,22 +63304,22 @@ class C
             comp.VerifyDiagnostics(
                 // (6,14): error CS8628: Cannot use a nullable reference type in object creation.
                 //         x1 = new object?(); // error 1
-                Diagnostic(ErrorCode.ERR_AnnotationDisallowedInObjectCreation, "new object?()").WithArguments("object").WithLocation(6, 14),
+                Diagnostic(ErrorCode.ERR_AnnotationDisallowedInObjectCreation, "new object?()").WithLocation(6, 14),
                 // (7,14): error CS8628: Cannot use a nullable reference type in object creation.
                 //         x1 = new object? { }; // error 2
-                Diagnostic(ErrorCode.ERR_AnnotationDisallowedInObjectCreation, "new object? { }").WithArguments("object").WithLocation(7, 14),
+                Diagnostic(ErrorCode.ERR_AnnotationDisallowedInObjectCreation, "new object? { }").WithLocation(7, 14),
                 // (9,14): error CS8628: Cannot use a nullable reference type in object creation.
                 //         x1 = new object[]? {};   // error 3
-                Diagnostic(ErrorCode.ERR_AnnotationDisallowedInObjectCreation, "new object[]? {}").WithArguments("object[]").WithLocation(9, 14),
+                Diagnostic(ErrorCode.ERR_AnnotationDisallowedInObjectCreation, "new object[]? {}").WithLocation(9, 14),
                 // (9,18): error CS8386: Invalid object creation
                 //         x1 = new object[]? {};   // error 3
-                Diagnostic(ErrorCode.ERR_InvalidObjectCreation, "object[]?").WithArguments("object[]").WithLocation(9, 18),
+                Diagnostic(ErrorCode.ERR_InvalidObjectCreation, "object[]?").WithLocation(9, 18),
                 // (14,18): error CS8627: A nullable type parameter must be known to be a value type or non-nullable reference type unless language version '9.0' or greater is used. Consider changing the language version or adding a 'class', 'struct', or type constraint.
                 //         x2 = new T2?(); // error 4
                 Diagnostic(ErrorCode.ERR_NullableUnconstrainedTypeParameter, "T2?").WithArguments("9.0").WithLocation(14, 18),
                 // (14,14): error CS8628: Cannot use a nullable reference type in object creation.
                 //         x2 = new T2?(); // error 4
-                Diagnostic(ErrorCode.ERR_AnnotationDisallowedInObjectCreation, "new T2?()").WithArguments("T2").WithLocation(14, 14),
+                Diagnostic(ErrorCode.ERR_AnnotationDisallowedInObjectCreation, "new T2?()").WithLocation(14, 14),
                 // (14,14): error CS0304: Cannot create an instance of the variable type 'T2' because it does not have the new() constraint
                 //         x2 = new T2?(); // error 4
                 Diagnostic(ErrorCode.ERR_NoNewTyvar, "new T2?()").WithArguments("T2").WithLocation(14, 14),
@@ -63326,7 +63328,7 @@ class C
                 Diagnostic(ErrorCode.ERR_NullableUnconstrainedTypeParameter, "T2?").WithArguments("9.0").WithLocation(15, 18),
                 // (15,14): error CS8628: Cannot use a nullable reference type in object creation.
                 //         x2 = new T2? { }; // error 5
-                Diagnostic(ErrorCode.ERR_AnnotationDisallowedInObjectCreation, "new T2? { }").WithArguments("T2").WithLocation(15, 14),
+                Diagnostic(ErrorCode.ERR_AnnotationDisallowedInObjectCreation, "new T2? { }").WithLocation(15, 14),
                 // (15,14): error CS0304: Cannot create an instance of the variable type 'T2' because it does not have the new() constraint
                 //         x2 = new T2? { }; // error 5
                 Diagnostic(ErrorCode.ERR_NoNewTyvar, "new T2? { }").WithArguments("T2").WithLocation(15, 14),
@@ -63335,22 +63337,22 @@ class C
                 Diagnostic(ErrorCode.ERR_NullableUnconstrainedTypeParameter, "T2?").WithArguments("9.0").WithLocation(16, 19),
                 // (21,14): error CS8628: Cannot use a nullable reference type in object creation.
                 //         x3 = new T3?(); // error 6
-                Diagnostic(ErrorCode.ERR_AnnotationDisallowedInObjectCreation, "new T3?()").WithArguments("T3").WithLocation(21, 14),
+                Diagnostic(ErrorCode.ERR_AnnotationDisallowedInObjectCreation, "new T3?()").WithLocation(21, 14),
                 // (22,14): error CS8628: Cannot use a nullable reference type in object creation.
                 //         x3 = new T3? { }; // error 7
-                Diagnostic(ErrorCode.ERR_AnnotationDisallowedInObjectCreation, "new T3? { }").WithArguments("T3").WithLocation(22, 14),
+                Diagnostic(ErrorCode.ERR_AnnotationDisallowedInObjectCreation, "new T3? { }").WithLocation(22, 14),
                 // (28,18): error CS8627: A nullable type parameter must be known to be a value type or non-nullable reference type unless language version '9.0' or greater is used. Consider changing the language version or adding a 'class', 'struct', or type constraint.
                 //         x4 = new T4?(); // error 8
                 Diagnostic(ErrorCode.ERR_NullableUnconstrainedTypeParameter, "T4?").WithArguments("9.0").WithLocation(28, 18),
                 // (28,14): error CS8628: Cannot use a nullable reference type in object creation.
                 //         x4 = new T4?(); // error 8
-                Diagnostic(ErrorCode.ERR_AnnotationDisallowedInObjectCreation, "new T4?()").WithArguments("T4").WithLocation(28, 14),
+                Diagnostic(ErrorCode.ERR_AnnotationDisallowedInObjectCreation, "new T4?()").WithLocation(28, 14),
                 // (29,18): error CS8627: A nullable type parameter must be known to be a value type or non-nullable reference type unless language version '9.0' or greater is used. Consider changing the language version or adding a 'class', 'struct', or type constraint.
                 //         x4 = new T4? { }; // error 9
                 Diagnostic(ErrorCode.ERR_NullableUnconstrainedTypeParameter, "T4?").WithArguments("9.0").WithLocation(29, 18),
                 // (29,14): error CS8628: Cannot use a nullable reference type in object creation.
                 //         x4 = new T4? { }; // error 9
-                Diagnostic(ErrorCode.ERR_AnnotationDisallowedInObjectCreation, "new T4? { }").WithArguments("T4").WithLocation(29, 14),
+                Diagnostic(ErrorCode.ERR_AnnotationDisallowedInObjectCreation, "new T4? { }").WithLocation(29, 14),
                 // (30,19): error CS8627: A nullable type parameter must be known to be a value type or non-nullable reference type unless language version '9.0' or greater is used. Consider changing the language version or adding a 'class', 'struct', or type constraint.
                 //         x4 = (new T4?[1])[0];
                 Diagnostic(ErrorCode.ERR_NullableUnconstrainedTypeParameter, "T4?").WithArguments("9.0").WithLocation(30, 19),
@@ -63359,13 +63361,13 @@ class C
                 Diagnostic(ErrorCode.ERR_ValConstraintNotSatisfied, "System.Nullable<int>?").WithArguments("System.Nullable<T>", "T", "int?").WithLocation(31, 18),
                 // (36,14): error CS8628: Cannot use a nullable reference type in object creation.
                 //         x5 = new T5?(); // error 10
-                Diagnostic(ErrorCode.ERR_AnnotationDisallowedInObjectCreation, "new T5?()").WithArguments("T5").WithLocation(36, 14),
+                Diagnostic(ErrorCode.ERR_AnnotationDisallowedInObjectCreation, "new T5?()").WithLocation(36, 14),
                 // (36,14): error CS0304: Cannot create an instance of the variable type 'T5' because it does not have the new() constraint
                 //         x5 = new T5?(); // error 10
                 Diagnostic(ErrorCode.ERR_NoNewTyvar, "new T5?()").WithArguments("T5").WithLocation(36, 14),
                 // (37,14): error CS8628: Cannot use a nullable reference type in object creation.
                 //         x5 = new T5? { }; // error 11
-                Diagnostic(ErrorCode.ERR_AnnotationDisallowedInObjectCreation, "new T5? { }").WithArguments("T5").WithLocation(37, 14),
+                Diagnostic(ErrorCode.ERR_AnnotationDisallowedInObjectCreation, "new T5? { }").WithLocation(37, 14),
                 // (37,14): error CS0304: Cannot create an instance of the variable type 'T5' because it does not have the new() constraint
                 //         x5 = new T5? { }; // error 11
                 Diagnostic(ErrorCode.ERR_NoNewTyvar, "new T5? { }").WithArguments("T5").WithLocation(37, 14)
@@ -151674,13 +151676,13 @@ class C<T> {}
                 Diagnostic(ErrorCode.ERR_BadArity, "C<System.Nullable<T?> x").WithArguments("C<T>", "type", "1").WithLocation(11, 32),
                 // (11,54): error CS1003: Syntax error, ',' expected
                 //     public override void M1<T>(C<System.Nullable<T?> x)
-                Diagnostic(ErrorCode.ERR_SyntaxError, "x").WithArguments(",", "").WithLocation(11, 54),
+                Diagnostic(ErrorCode.ERR_SyntaxError, "x").WithArguments(",").WithLocation(11, 54),
                 // (11,54): error CS0246: The type or namespace name 'x' could not be found (are you missing a using directive or an assembly reference?)
                 //     public override void M1<T>(C<System.Nullable<T?> x)
                 Diagnostic(ErrorCode.ERR_SingleTypeNameNotFound, "x").WithArguments("x").WithLocation(11, 54),
                 // (11,55): error CS1003: Syntax error, '>' expected
                 //     public override void M1<T>(C<System.Nullable<T?> x)
-                Diagnostic(ErrorCode.ERR_SyntaxError, ")").WithArguments(">", ")").WithLocation(11, 55),
+                Diagnostic(ErrorCode.ERR_SyntaxError, ")").WithArguments(">").WithLocation(11, 55),
                 // (11,55): error CS1001: Identifier expected
                 //     public override void M1<T>(C<System.Nullable<T?> x)
                 Diagnostic(ErrorCode.ERR_IdentifierExpected, ")").WithLocation(11, 55),
@@ -152167,7 +152169,7 @@ class C
             comp.VerifyEmitDiagnostics(
                 // (9,15): error CS1003: Syntax error, '=>' expected
                 //             0 =
-                Diagnostic(ErrorCode.ERR_SyntaxError, "=").WithArguments("=>", "=").WithLocation(9, 15),
+                Diagnostic(ErrorCode.ERR_SyntaxError, "=").WithArguments("=>").WithLocation(9, 15),
                 // (9,15): error CS1525: Invalid expression term '='
                 //             0 =
                 Diagnostic(ErrorCode.ERR_InvalidExprTerm, "=").WithArguments("=").WithLocation(9, 15),
@@ -156105,6 +156107,266 @@ unsafe class C
                 // (9,18): error CS0826: No best type found for implicitly-typed array
                 //         var s2 = stackalloc[] { x => x };
                 Diagnostic(ErrorCode.ERR_ImplicitlyTypedArrayNoBestType, "stackalloc[] { x => x }").WithLocation(9, 18)
+                );
+        }
+
+        [Fact]
+        public void NullableBoolInVariousTests()
+        {
+            var comp = CreateCompilation(@"
+#nullable enable
+class C
+{
+    public static void M(bool? x)
+    {
+        if (x) // 1
+        {
+            x.Value.ToString(); // 2
+        }
+
+        _ = x ? x.Value.ToString() : string.Empty; // 3, 4
+
+        if (x == true)
+        {
+            x.Value.ToString();
+        }
+
+        _ = (x == true) ? x.Value.ToString() : string.Empty;
+
+        _ = x switch
+        {
+            true => x.Value.ToString(),
+            _ => string.Empty
+        };
+    }
+}
+");
+
+            comp.VerifyDiagnostics(
+                // (7,13): error CS0266: Cannot implicitly convert type 'bool?' to 'bool'. An explicit conversion exists (are you missing a cast?)
+                //         if (x) // 1
+                Diagnostic(ErrorCode.ERR_NoImplicitConvCast, "x").WithArguments("bool?", "bool").WithLocation(7, 13),
+                // (9,13): warning CS8629: Nullable value type may be null.
+                //             x.Value.ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullableValueTypeMayBeNull, "x").WithLocation(9, 13),
+                // (12,13): error CS0266: Cannot implicitly convert type 'bool?' to 'bool'. An explicit conversion exists (are you missing a cast?)
+                //         _ = x ? x.Value.ToString() : string.Empty; // 3, 4
+                Diagnostic(ErrorCode.ERR_NoImplicitConvCast, "x").WithArguments("bool?", "bool").WithLocation(12, 13),
+                // (12,17): warning CS8629: Nullable value type may be null.
+                //         _ = x ? x.Value.ToString() : string.Empty; // 3, 4
+                Diagnostic(ErrorCode.WRN_NullableValueTypeMayBeNull, "x").WithLocation(12, 17)
+                );
+        }
+
+        [Theory, WorkItem(61361, "https://github.com/dotnet/roslyn/issues/61361")]
+        [InlineData("<")]
+        [InlineData("<=")]
+        [InlineData(">")]
+        [InlineData(">=")]
+        public void LiftedRelationalOperation(string op)
+        {
+            var comp = CreateCompilation($$"""
+#nullable enable
+class C
+{
+    public static void Test(int? first, int? second)
+    {
+        if (first {{op}} second)
+        {
+            first.Value.ToString();
+            second.Value.ToString();
+        }
+        else
+        {
+            first.Value.ToString(); // 1
+            second.Value.ToString(); // 2
+        }
+    }
+
+    public static void Test2(int? first, int? second)
+    {
+        _ = (first {{op}} second)
+            ? (first.Value.ToString() + second.Value.ToString())
+            : (first.Value.ToString() + second.Value.ToString()); // 3, 4
+    }
+
+    public static void Test3(int? first, int? second)
+    {
+        _ = (first {{op}} second) switch
+        {
+            true => first.Value.ToString() + second.Value.ToString(),
+            _ => first.Value.ToString() + second.Value.ToString() // 5, 6
+        };
+    }
+}
+""");
+            comp.VerifyDiagnostics(
+                // (13,13): warning CS8629: Nullable value type may be null.
+                //             first.Value.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullableValueTypeMayBeNull, "first").WithLocation(13, 13),
+                // (14,13): warning CS8629: Nullable value type may be null.
+                //             second.Value.ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullableValueTypeMayBeNull, "second").WithLocation(14, 13),
+                // (22,16): warning CS8629: Nullable value type may be null.
+                //             : (first.Value.ToString() + second.Value.ToString()); // 3, 4
+                Diagnostic(ErrorCode.WRN_NullableValueTypeMayBeNull, "first").WithLocation(22, 16),
+                // (22,41): warning CS8629: Nullable value type may be null.
+                //             : (first.Value.ToString() + second.Value.ToString()); // 3, 4
+                Diagnostic(ErrorCode.WRN_NullableValueTypeMayBeNull, "second").WithLocation(22, 41),
+                // (30,18): warning CS8629: Nullable value type may be null.
+                //             _ => first.Value.ToString() + second.Value.ToString() // 5, 6
+                Diagnostic(ErrorCode.WRN_NullableValueTypeMayBeNull, "first").WithLocation(30, 18),
+                // (30,43): warning CS8629: Nullable value type may be null.
+                //             _ => first.Value.ToString() + second.Value.ToString() // 5, 6
+                Diagnostic(ErrorCode.WRN_NullableValueTypeMayBeNull, "second").WithLocation(30, 43)
+                );
+        }
+
+        [Theory, WorkItem(61361, "https://github.com/dotnet/roslyn/issues/61361")]
+        [InlineData("==")]
+        [InlineData("!=")]
+        public void LiftedEqualityOperation(string op)
+        {
+            var comp = CreateCompilation($$"""
+#nullable enable
+class C
+{
+    public static void Test(int? first, int? second)
+    {
+        if (first {{op}} second)
+        {
+            first.Value.ToString(); // 1
+            second.Value.ToString(); // 2
+        }
+
+        _ = (first {{op}} second)
+            ? (first.Value.ToString() + second.Value.ToString()) // 3, 4
+            : string.Empty;
+
+        _ = (first {{op}} second) switch
+        {
+            true => first.Value.ToString() + second.Value.ToString(), // 5, 6
+            _ => string.Empty
+        };
+    }
+}
+""");
+            comp.VerifyDiagnostics(
+                // (8,13): warning CS8629: Nullable value type may be null.
+                //             first.Value.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullableValueTypeMayBeNull, "first").WithLocation(8, 13),
+                // (9,13): warning CS8629: Nullable value type may be null.
+                //             second.Value.ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullableValueTypeMayBeNull, "second").WithLocation(9, 13),
+                // (13,16): warning CS8629: Nullable value type may be null.
+                //             ? (first.Value.ToString() + second.Value.ToString()) // 3, 4
+                Diagnostic(ErrorCode.WRN_NullableValueTypeMayBeNull, "first").WithLocation(13, 16),
+                // (13,41): warning CS8629: Nullable value type may be null.
+                //             ? (first.Value.ToString() + second.Value.ToString()) // 3, 4
+                Diagnostic(ErrorCode.WRN_NullableValueTypeMayBeNull, "second").WithLocation(13, 41),
+                // (18,21): warning CS8629: Nullable value type may be null.
+                //             true => first.Value.ToString() + second.Value.ToString(), // 5, 6
+                Diagnostic(ErrorCode.WRN_NullableValueTypeMayBeNull, "first").WithLocation(18, 21),
+                // (18,46): warning CS8629: Nullable value type may be null.
+                //             true => first.Value.ToString() + second.Value.ToString(), // 5, 6
+                Diagnostic(ErrorCode.WRN_NullableValueTypeMayBeNull, "second").WithLocation(18, 46)
+                );
+        }
+
+        [Fact, WorkItem(61361, "https://github.com/dotnet/roslyn/issues/61361")]
+        public void LiftedRelationalOperation_DateTime()
+        {
+            var comp = CreateCompilation(@"
+using System;
+
+#nullable enable
+class C
+{
+    public static DateTime Test(DateTime? first, DateTime? second, DateTime? third)
+    {
+        if (first < third)
+        {
+            if (second < first.Value)
+            {
+            }
+        }
+
+        return DateTime.Now;
+    }
+}
+");
+            comp.VerifyDiagnostics();
+        }
+
+        [Fact, WorkItem(61361, "https://github.com/dotnet/roslyn/issues/61361")]
+        public void LiftedRelationalOperation_UserDefined()
+        {
+            var comp = CreateCompilation(@"
+#nullable enable
+
+struct C
+{
+    public static void M(C? c1, C c2)
+    {
+        _ = c1 < c2;
+        _ = c2 < c1;
+    }
+    public static string operator <(C c1, C c2) => string.Empty;
+    public static string operator >(C c1, C c2) => string.Empty;
+}
+");
+            comp.VerifyDiagnostics(
+                // (8,13): error CS0019: Operator '<' cannot be applied to operands of type 'C?' and 'C'
+                //         _ = c1 < c2;
+                Diagnostic(ErrorCode.ERR_BadBinaryOps, "c1 < c2").WithArguments("<", "C?", "C").WithLocation(8, 13),
+                // (9,13): error CS0019: Operator '<' cannot be applied to operands of type 'C' and 'C?'
+                //         _ = c2 < c1;
+                Diagnostic(ErrorCode.ERR_BadBinaryOps, "c2 < c1").WithArguments("<", "C", "C?").WithLocation(9, 13)
+                );
+        }
+
+        [Fact, WorkItem(61361, "https://github.com/dotnet/roslyn/issues/61361")]
+        public void LiftedRelationalOperation_UserDefined_BoolReturning()
+        {
+            var comp = CreateCompilation(@"
+#nullable enable
+
+struct C
+{
+    public static void M(C? c1, C c2)
+    {
+        if (c1 < c2)
+        {
+            c1.Value.ToString();
+        }
+        else
+        {
+            c1.Value.ToString(); // 1
+        }
+    }
+    public static void M(C c1, C? c2)
+    {
+        if (c1 < c2)
+        {
+            c2.Value.ToString();
+        }
+        else
+        {
+            c2.Value.ToString(); // 2
+        }
+    }
+
+    public static bool operator <(C c1, C c2) => true;
+    public static bool operator >(C c1, C c2) => false;
+}
+");
+            comp.VerifyDiagnostics(
+                // (14,13): warning CS8629: Nullable value type may be null.
+                //             c1.Value.ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullableValueTypeMayBeNull, "c1").WithLocation(14, 13),
+                // (25,13): warning CS8629: Nullable value type may be null.
+                //             c2.Value.ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullableValueTypeMayBeNull, "c2").WithLocation(25, 13)
                 );
         }
     }
