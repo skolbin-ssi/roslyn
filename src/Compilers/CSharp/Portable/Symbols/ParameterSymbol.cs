@@ -415,6 +415,18 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
         /// </summary>
         internal abstract bool HasInterpolatedStringHandlerArgumentError { get; }
 
+        /// <summary>
+        /// The declared scope. From source, this is from the <c>scope</c> keyword
+        /// and any implicit scope, ignoring any <c>UnscopedRefAttribute</c>.
+        /// </summary>
+        internal abstract DeclarationScope DeclaredScope { get; }
+
+        /// <summary>
+        /// The effective scope. This is from the declared scope and any
+        /// <c>UnscopedRefAttribute</c>.
+        /// </summary>
+        internal abstract DeclarationScope EffectiveScope { get; }
+
         protected sealed override bool IsHighestPriorityUseSiteErrorCode(int code) => code is (int)ErrorCode.ERR_UnsupportedCompilerFeature or (int)ErrorCode.ERR_BogusType;
 
         public override bool HasUnsupportedMetadata

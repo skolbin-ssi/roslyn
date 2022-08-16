@@ -2,8 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-#nullable disable
-
 using System;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -35,9 +33,9 @@ namespace Microsoft.CodeAnalysis.FindSymbols
             Project project, Checksum checksum, bool loadOnly, CancellationToken cancellationToken)
         {
             var solution = project.Solution;
-            var services = solution.Workspace.Services;
+            var services = solution.Services;
             var solutionKey = SolutionKey.ToSolutionKey(solution);
-            var projectFilePath = project.FilePath;
+            var projectFilePath = project.FilePath ?? "";
 
             var result = TryLoadOrCreateAsync(
                 services,
@@ -75,7 +73,7 @@ namespace Microsoft.CodeAnalysis.FindSymbols
             // changed.  The only thing that can make those source-symbols change in that manner are if
             // the text of any document changes, or if options for the project change.  So we build our
             // checksum out of that data.
-            var serializer = projectState.LanguageServices.WorkspaceServices.GetService<ISerializerService>();
+            var serializer = projectState.LanguageServices.LanguageServices.SolutionServices.GetService<ISerializerService>();
             var projectStateChecksums = await projectState.GetStateChecksumsAsync(cancellationToken).ConfigureAwait(false);
 
             // Order the documents by FilePath.  Default ordering in the RemoteWorkspace is
@@ -120,13 +118,13 @@ namespace Microsoft.CodeAnalysis.FindSymbols
             GenerateSourceNodes(assembly.GlobalNamespace, unsortedNodes, s_getMembersNoPrivate);
 
             var solution = project.Solution;
-            var services = solution.Workspace.Services;
+            var services = solution.Services;
             var solutionKey = SolutionKey.ToSolutionKey(solution);
 
             return CreateSymbolTreeInfo(
-                services, solutionKey, checksum, project.FilePath, unsortedNodes.ToImmutableAndFree(),
+                services, solutionKey, checksum, project.FilePath ?? "", unsortedNodes.ToImmutableAndFree(),
                 inheritanceMap: new OrderPreservingMultiDictionary<string, string>(),
-                simpleMethods: null);
+                receiverTypeNameToExtensionMethodMap: null);
         }
 
         // generate nodes for the global namespace an all descendants

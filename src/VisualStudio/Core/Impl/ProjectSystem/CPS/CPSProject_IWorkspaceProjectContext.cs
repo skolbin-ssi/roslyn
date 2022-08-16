@@ -85,7 +85,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.ProjectSystem.C
             // If we have a command line parser service for this language, also set up our ability to process options if they come in
             if (visualStudioWorkspace.Services.GetLanguageServices(visualStudioProject.Language).GetService<ICommandLineParserService>() != null)
             {
-                _visualStudioProjectOptionsProcessor = new VisualStudioProjectOptionsProcessor(_visualStudioProject, visualStudioWorkspace.Services);
+                _visualStudioProjectOptionsProcessor = new VisualStudioProjectOptionsProcessor(_visualStudioProject, visualStudioWorkspace.Services.SolutionServices);
                 _visualStudioWorkspace.AddProjectRuleSetFileToInternalMaps(
                     visualStudioProject,
                     () => _visualStudioProjectOptionsProcessor.EffectiveRuleSetFilePath);
@@ -129,7 +129,6 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.ProjectSystem.C
 
         public ProjectId Id => _visualStudioProject.Id;
 
-        [Obsolete("To avoid contributing to the large object heap, use SetOptions(ImmutableArray<string>). This API will be removed in the future.")]
         public void SetOptions(string commandLineForOptions)
             => _visualStudioProjectOptionsProcessor?.SetCommandLine(commandLineForOptions);
 

@@ -16,7 +16,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.ErrorReporting;
 using Microsoft.CodeAnalysis.Host.Mef;
 using Microsoft.CodeAnalysis.Internal.Log;
-using Microsoft.CodeAnalysis.LanguageServices;
+using Microsoft.CodeAnalysis.LanguageService;
 using Microsoft.CodeAnalysis.Shared.Extensions;
 using Microsoft.CodeAnalysis.Snippets;
 using Microsoft.CodeAnalysis.Text;
@@ -96,11 +96,6 @@ namespace Microsoft.CodeAnalysis.CSharp.Completion.Providers
 
             var context = await completionContext.GetSyntaxContextWithExistingSpeculativeModelAsync(document, cancellationToken).ConfigureAwait(false);
             var semanticModel = context.SemanticModel;
-
-            if (context.IsInTaskLikeTypeContext)
-            {
-                return ImmutableArray<CompletionItem>.Empty;
-            }
 
             if (syntaxFacts.IsPreProcessorDirectiveContext(syntaxTree, position, cancellationToken))
             {

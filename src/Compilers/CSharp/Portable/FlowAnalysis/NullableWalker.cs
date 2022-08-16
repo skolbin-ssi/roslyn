@@ -3751,7 +3751,9 @@ namespace Microsoft.CodeAnalysis.CSharp
         }
 
         [Obsolete("Use VisitCollectionElementInitializer(BoundCollectionElementInitializer node, TypeSymbol containingType, bool delayCompletionForType) instead.", true)]
+#pragma warning disable IDE0051 // Remove unused private members
         private new void VisitCollectionElementInitializer(BoundCollectionElementInitializer node)
+#pragma warning restore IDE0051 // Remove unused private members
         {
             throw ExceptionUtilities.Unreachable;
         }
@@ -7873,12 +7875,13 @@ namespace Microsoft.CodeAnalysis.CSharp
                             _ => (null, ImmutableArray<ParameterSymbol>.Empty),
                         };
 
+#nullable enable
                 case ConversionKind.AnonymousFunction:
                     if (conversionOperand is BoundLambda lambda)
                     {
                         var delegateType = targetType.GetDelegateType();
                         VisitLambda(lambda, delegateType, stateForLambda);
-                        if (reportRemainingWarnings)
+                        if (reportRemainingWarnings && delegateType is not null)
                         {
                             ReportNullabilityMismatchWithTargetDelegate(diagnosticLocationOpt, delegateType, lambda);
                         }
@@ -7888,6 +7891,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                         return TypeWithState.Create(targetType, NullableFlowState.NotNull);
                     }
                     break;
+#nullable disable
 
                 case ConversionKind.FunctionType:
                     resultState = NullableFlowState.NotNull;
@@ -8081,7 +8085,7 @@ namespace Microsoft.CodeAnalysis.CSharp
 
             TypeWithState resultType = calculateResultType(targetTypeWithNullability, fromExplicitCast, resultState, isSuppressed, targetType);
 
-            if (operandType.Type?.IsErrorType() != true && !targetType.IsErrorType())
+            if (!conversionOperand.HasErrors && !targetType.IsErrorType())
             {
                 // Need to report all warnings that apply since the warnings can be suppressed individually.
                 if (reportTopLevelWarnings)
@@ -10542,10 +10546,10 @@ namespace Microsoft.CodeAnalysis.CSharp
             return result;
         }
 
-        public override BoundNode? VisitUTF8String(BoundUTF8String node)
+        public override BoundNode? VisitUtf8String(BoundUtf8String node)
         {
             Debug.Assert(!IsConditionalState);
-            var result = base.VisitUTF8String(node);
+            var result = base.VisitUtf8String(node);
             SetNotNullResult(node);
             return result;
         }

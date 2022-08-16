@@ -1205,10 +1205,50 @@ class C
                 );
         }
 
+        [Theory]
+        [InlineData(LanguageVersion.CSharp10)]
+        [InlineData(LanguageVersion.CSharp11)]
+        public void SuppressNullableWarning_RefReturn(LanguageVersion langVersion)
+        {
+            var source =
+@"#nullable enable
+ref struct R<T>
+{
+    public R(ref T t) { }
+}
+class C
+{
+    static ref R<string?> M(bool b)
+    {
+        string s = string.Empty;
+        R<string> r = new R<string>(ref s);
+        if (b)
+            return ref r; // 1
+        else
+            return ref r!; // 2
+    }
+}";
+            var comp = CreateCompilation(source, parseOptions: TestOptions.Regular.WithLanguageVersion(langVersion));
+            comp.VerifyDiagnostics(
+                // (13,24): error CS8168: Cannot return local 'r' by reference because it is not a ref local
+                //             return ref r; // 1
+                Diagnostic(ErrorCode.ERR_RefReturnLocal, "r").WithArguments("r").WithLocation(13, 24),
+                // (13,24): warning CS8619: Nullability of reference types in value of type 'R<string>' doesn't match target type 'R<string?>'.
+                //             return ref r; // 1
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInAssignment, "r").WithArguments("R<string>", "R<string?>").WithLocation(13, 24),
+                // (15,24): error CS8168: Cannot return local 'r' by reference because it is not a ref local
+                //             return ref r!; // 2
+                Diagnostic(ErrorCode.ERR_RefReturnLocal, "r").WithArguments("r").WithLocation(15, 24),
+                // (15,24): warning CS8619: Nullability of reference types in value of type 'R<string>' doesn't match target type 'R<string?>'.
+                //             return ref r!; // 2
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInAssignment, "r").WithArguments("R<string>", "R<string?>").WithLocation(15, 24));
+        }
+
         [Fact, WorkItem(31297, "https://github.com/dotnet/roslyn/issues/31297")]
         public void SuppressNullableWarning_RefSpanReturn()
         {
-            var comp = CreateCompilationWithMscorlibAndSpan(@"
+            var source =
+@"#nullable enable
 using System;
 class C
 {
@@ -1228,8 +1268,9 @@ class C
         else
             return ref x!;
     }
-}", options: WithNullable(TestOptions.ReleaseDll, NullableContextOptions.Enable));
+}";
 
+            var comp = CreateCompilationWithMscorlibAndSpan(source, parseOptions: TestOptions.Regular10, options: TestOptions.ReleaseDll);
             comp.VerifyDiagnostics(
                 // (10,24): error CS8157: Cannot return 'y' by reference because it was initialized to a value that cannot be returned by reference
                 //             return ref y; // 1
@@ -1240,6 +1281,28 @@ class C
                 // (17,24): warning CS8619: Nullability of reference types in value of type 'Span<string?>' doesn't match target type 'Span<string>'.
                 //             return ref x; // 3
                 Diagnostic(ErrorCode.WRN_NullabilityMismatchInAssignment, "x").WithArguments("System.Span<string?>", "System.Span<string>").WithLocation(17, 24)
+                );
+
+            comp = CreateCompilationWithMscorlibAndSpan(source, options: TestOptions.ReleaseDll);
+            comp.VerifyDiagnostics(
+                // (10,24): error CS8157: Cannot return 'y' by reference because it was initialized to a value that cannot be returned by reference
+                //             return ref y; // 1
+                Diagnostic(ErrorCode.ERR_RefReturnNonreturnableLocal, "y").WithArguments("y").WithLocation(10, 24),
+                // (12,24): error CS8157: Cannot return 'y' by reference because it was initialized to a value that cannot be returned by reference
+                //             return ref y!; // 2
+                Diagnostic(ErrorCode.ERR_RefReturnNonreturnableLocal, "y").WithArguments("y").WithLocation(12, 24),
+                // (17,24): error CS8166: Cannot return a parameter by reference 'x' because it is not a ref parameter
+                //             return ref x; // 3
+                Diagnostic(ErrorCode.ERR_RefReturnParameter, "x").WithArguments("x").WithLocation(17, 24),
+                // (17,24): warning CS8619: Nullability of reference types in value of type 'System.Span<string?>' doesn't match target type 'System.Span<string>'.
+                //             return ref x; // 3
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInAssignment, "x").WithArguments("System.Span<string?>", "System.Span<string>").WithLocation(17, 24),
+                // (19,24): error CS8166: Cannot return a parameter by reference 'x' because it is not a ref parameter
+                //             return ref x!;
+                Diagnostic(ErrorCode.ERR_RefReturnParameter, "x").WithArguments("x").WithLocation(19, 24),
+                // (19,24): warning CS8619: Nullability of reference types in value of type 'System.Span<string?>' doesn't match target type 'System.Span<string>'.
+                //             return ref x!;
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInAssignment, "x").WithArguments("System.Span<string?>", "System.Span<string>").WithLocation(19, 24)
                 );
         }
 
@@ -2646,18 +2709,12 @@ unsafe class C<T>
                 // (6,26): error CS0208: Cannot take the address of, get the size of, or declare a pointer to a managed type ('C<string>')
                 //         C<string?>* y1 = &x;
                 Diagnostic(ErrorCode.ERR_ManagedAddr, "&x").WithArguments("C<string>").WithLocation(6, 26),
-                // (6,26): warning CS8619: Nullability of reference types in value of type 'C<string>*' doesn't match target type 'C<string?>*'.
-                //         C<string?>* y1 = &x;
-                Diagnostic(ErrorCode.WRN_NullabilityMismatchInAssignment, "&x").WithArguments("C<string>*", "C<string?>*").WithLocation(6, 26),
                 // (7,9): error CS0208: Cannot take the address of, get the size of, or declare a pointer to a managed type ('C<string?>')
                 //         C<string?>* y2 = &x!;
                 Diagnostic(ErrorCode.ERR_ManagedAddr, "C<string?>*").WithArguments("C<string?>").WithLocation(7, 9),
                 // (7,26): error CS0208: Cannot take the address of, get the size of, or declare a pointer to a managed type ('C<string>')
                 //         C<string?>* y2 = &x!;
                 Diagnostic(ErrorCode.ERR_ManagedAddr, "&x!").WithArguments("C<string>").WithLocation(7, 26),
-                // (7,26): warning CS8619: Nullability of reference types in value of type 'C<string>*' doesn't match target type 'C<string?>*'.
-                //         C<string?>* y2 = &x!;
-                Diagnostic(ErrorCode.WRN_NullabilityMismatchInAssignment, "&x!").WithArguments("C<string>*", "C<string?>*").WithLocation(7, 26),
                 // (7,27): error CS8598: The suppression operator is not allowed in this context
                 //         C<string?>* y2 = &x!;
                 Diagnostic(ErrorCode.ERR_IllegalSuppression, "x").WithLocation(7, 27)
@@ -156367,6 +156424,32 @@ struct C
                 // (25,13): warning CS8629: Nullable value type may be null.
                 //             c2.Value.ToString(); // 2
                 Diagnostic(ErrorCode.WRN_NullableValueTypeMayBeNull, "c2").WithLocation(25, 13)
+                );
+        }
+
+        [Fact, WorkItem(61462, "https://github.com/dotnet/roslyn/issues/61462")]
+        public void NoNullabilityWarningUnlessAssignmentConversionExists()
+        {
+            var comp = CreateCompilation("""
+#nullable enable
+
+public static class S
+{
+    public const string A = "a";
+}
+
+public class C
+{
+    public (string, string) M()
+    {
+        return ("a", S.B);
+    }
+}
+""");
+            comp.VerifyDiagnostics(
+                // (12,24): error CS0117: 'S' does not contain a definition for 'B'
+                //         return ("a", S.B);
+                Diagnostic(ErrorCode.ERR_NoSuchMember, "B").WithArguments("S", "B").WithLocation(12, 24)
                 );
         }
     }

@@ -64,7 +64,7 @@ namespace Microsoft.CodeAnalysis.Completion.Providers
             }
 
             private static IImportCompletionCacheService<ExtensionMethodImportCompletionCacheEntry, object> GetCacheService(Project project)
-                => project.Solution.Workspace.Services.GetRequiredService<IImportCompletionCacheService<ExtensionMethodImportCompletionCacheEntry, object>>();
+                => project.Solution.Services.GetRequiredService<IImportCompletionCacheService<ExtensionMethodImportCompletionCacheEntry, object>>();
 
             private static string? GetPEReferenceCacheKey(PortableExecutableReference peReference)
                 => peReference.FilePath ?? peReference.Display;
@@ -148,7 +148,7 @@ namespace Microsoft.CodeAnalysis.Completion.Providers
             {
                 var graph = project.Solution.GetProjectDependencyGraph();
                 var relevantProjectIds = graph.GetProjectsThatThisProjectTransitivelyDependsOn(project.Id).Concat(project.Id);
-                return relevantProjectIds.Select(id => project.Solution.GetRequiredProject(id)).Where(p => p.SupportsCompilation).ToImmutableArray();
+                return relevantProjectIds.Select(project.Solution.GetRequiredProject).Where(p => p.SupportsCompilation).ToImmutableArray();
             }
 
             // Returns all PEs referenced by originating project.
@@ -521,7 +521,7 @@ namespace Microsoft.CodeAnalysis.Completion.Providers
                 receiverTypeNamesBuilder.Add(FindSymbols.Extensions.ComplexReceiverTypeName);
                 receiverTypeNamesBuilder.Add(FindSymbols.Extensions.ComplexArrayReceiverTypeName);
 
-                return receiverTypeNamesBuilder.ToImmutable();
+                return receiverTypeNamesBuilder.ToImmutableAndClear();
             }
 
             private static string GetReceiverTypeName(ITypeSymbol typeSymbol)

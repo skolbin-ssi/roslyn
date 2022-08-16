@@ -817,7 +817,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                 // Note: we delayed nullable-related checks that could pull on NonNullTypes
                 if (explicitlyImplementedProperty is object)
                 {
-                    TypeSymbol.CheckNullableReferenceTypeMismatchOnImplementingMember(this.ContainingType, this, explicitlyImplementedProperty, isExplicit: true, diagnostics);
+                    TypeSymbol.CheckNullableReferenceTypeAndScopedMismatchOnImplementingMember(this.ContainingType, this, explicitlyImplementedProperty, isExplicit: true, diagnostics);
                 }
             }
 
@@ -835,6 +835,8 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
 
             ParameterHelpers.EnsureNativeIntegerAttributeExists(compilation, Parameters, diagnostics, modifyCompilation: true);
 
+            ParameterHelpers.EnsureScopedRefAttributeExists(compilation, Parameters, diagnostics, modifyCompilation: true);
+
             if (compilation.ShouldEmitNullableAttributes(this) &&
                 this.TypeWithAnnotations.NeedsNullableAttribute())
             {
@@ -846,11 +848,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
 
         private void CheckAccessibility(Location location, BindingDiagnosticBag diagnostics, bool isExplicitInterfaceImplementation)
         {
-            var info = ModifierUtils.CheckAccessibility(_modifiers, this, isExplicitInterfaceImplementation);
-            if (info != null)
-            {
-                diagnostics.Add(new CSDiagnostic(info, location));
-            }
+            ModifierUtils.CheckAccessibility(_modifiers, this, isExplicitInterfaceImplementation, diagnostics, location);
         }
 
         private void CheckModifiers(bool isExplicitInterfaceImplementation, Location location, bool isIndexer, BindingDiagnosticBag diagnostics)
@@ -1315,7 +1313,31 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                 MessageID.IDS_FeatureMemberNotNull.CheckFeatureAvailability(diagnostics, arguments.AttributeSyntaxOpt);
                 CSharpAttributeData.DecodeMemberNotNullWhenAttribute<PropertyWellKnownAttributeData>(ContainingType, ref arguments);
             }
+            else if (attribute.IsTargetAttribute(this, AttributeDescription.UnscopedRefAttribute))
+            {
+                if (this.IsValidUnscopedRefAttributeTarget())
+                {
+                    arguments.GetOrCreateData<PropertyWellKnownAttributeData>().HasUnscopedRefAttribute = true;
+                }
+                else
+                {
+                    diagnostics.Add(ErrorCode.ERR_UnscopedRefAttributeUnsupportedTarget, arguments.AttributeSyntaxOpt.Location);
+                }
+            }
         }
+
+#nullable enable
+        private bool IsValidUnscopedRefAttributeTarget()
+        {
+            return isNullOrValidAccessor(_getMethod) &&
+                isNullOrValidAccessor(_setMethod);
+
+            static bool isNullOrValidAccessor(MethodSymbol? accessor)
+            {
+                return accessor is null || accessor.IsValidUnscopedRefAttributeTarget();
+            }
+        }
+#nullable disable
 
         internal bool HasDisallowNull
         {
@@ -1370,6 +1392,8 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
 
         internal ImmutableArray<SourceAttributeData> MemberNotNullWhenAttributeIfExists
             => FindAttributes(AttributeDescription.MemberNotNullWhenAttribute);
+
+        internal sealed override bool HasUnscopedRefAttribute => GetDecodedWellKnownAttributeData()?.HasUnscopedRefAttribute == true;
 
         private SourceAttributeData FindAttribute(AttributeDescription attributeDescription)
             => (SourceAttributeData)GetAttributes().First(a => a.IsTargetAttribute(this, attributeDescription));

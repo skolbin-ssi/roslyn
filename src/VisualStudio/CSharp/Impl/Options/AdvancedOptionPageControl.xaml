@@ -15,7 +15,7 @@
             <GroupBox x:Uid="AnalysisGroupBox"
                       Header="{x:Static local:AdvancedOptionPageStrings.Option_Analysis}">
                 <StackPanel>
-                    <Label Content="{x:Static local:AdvancedOptionPageStrings.Option_Run_background_code_analysis_for}"/>
+                    <Label x:Name="Run_background_code_analysis_for_label" Content="{x:Static local:AdvancedOptionPageStrings.Option_Run_background_code_analysis_for}"/>
                     <StackPanel>
                         <ComboBox x:Name="Run_background_code_analysis_for" IsEditable="false" AutomationProperties.Name="{x:Static local:AdvancedOptionPageStrings.Option_Run_background_code_analysis_for}">
                             <ComboBoxItem Content="{x:Static local:AdvancedOptionPageStrings.Option_Background_Analysis_Scope_None}" Tag="{x:Static local:AdvancedOptionPageStrings.Option_Background_Analysis_Scope_None_Tag}" />
@@ -24,7 +24,7 @@
                             <ComboBoxItem Content="{x:Static local:AdvancedOptionPageStrings.Option_Background_Analysis_Scope_Full_Solution}" Tag="{x:Static local:AdvancedOptionPageStrings.Option_Background_Analysis_Scope_Full_Solution_Tag}" />
                         </ComboBox>
                     </StackPanel>
-                    <Label Content="{x:Static local:AdvancedOptionPageStrings.Option_Show_compiler_errors_and_warnings_for}"/>
+                    <Label x:Name="Show_compiler_errors_and_warnings_for_label" Content="{x:Static local:AdvancedOptionPageStrings.Option_Show_compiler_errors_and_warnings_for}"/>
                     <StackPanel>
                         <ComboBox x:Name="Show_compiler_errors_and_warnings_for" IsEditable="false" AutomationProperties.Name="{x:Static local:AdvancedOptionPageStrings.Option_Show_compiler_errors_and_warnings_for}">
                             <ComboBoxItem Content="{x:Static local:AdvancedOptionPageStrings.Option_Compiler_Diagnostics_Scope_None}" Tag="{x:Static local:AdvancedOptionPageStrings.Option_Compiler_Diagnostics_Scope_None_Tag}" />
@@ -69,6 +69,8 @@
             <GroupBox x:Uid="GoToDefinitionGroupBox"
                       Header="{x:Static local:AdvancedOptionPageStrings.Option_Go_To_Definition}">
                 <StackPanel>
+                    <CheckBox x:Name="Enable_navigation_to_sourcelink_and_embedded_sources"
+                              Content="{x:Static local:AdvancedOptionPageStrings.Option_Enable_navigation_to_sourcelink_and_embedded_sources}" />
                     <CheckBox x:Name="Enable_navigation_to_decompiled_sources"
                               Content="{x:Static local:AdvancedOptionPageStrings.Option_Enable_navigation_to_decompiled_sources}" />
                     <CheckBox x:Name="Always_use_default_symbol_servers_for_navigation"
