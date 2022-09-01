@@ -1,5 +1,33 @@
 # This document lists known breaking changes in Roslyn after .NET 6 all the way to .NET 7.
 
+## Type tests for `ref` structs ar not supported.
+
+***Introduced in Visual Studio 2022 version 17.4***
+
+When a `ref` struct type is used in an 'is' or 'as' operator, in some scenarios compiler was previously reporting
+an erroneous warning about the type test always failing at runtime, omitting the actual type check, and leading to
+incorrect behavior. When incorrect behavior at execution time was possible, compiler will now produce an error instead.
+
+```csharp
+ref struct G<T>
+{
+    public void Test()
+    {
+        if (this is G<int>) // Will now produce an error, used to be treated as always `false`.
+        {
+```
+
+## Unused results from ref local are dereferences.
+
+***Introduced in Visual Studio 2022 version 17.4***
+
+When a `ref` local variable is referenced by value, but the result is not used (such as being assigned to a discard), the result was previously ignored. The compiler will now dereference that local, ensuring that any side effects are observed.
+
+```csharp
+ref int local = Unsafe.NullRef<int>();
+_ = local; // Will now produce a `NullReferenceException`
+```
+
 ## Types cannot be named `scoped`
 
 ***Introduced in Visual Studio 2022 version 17.4.*** Starting in C# 11, types cannot be named `scoped`. The compiler will report an error on all such type names. To work around this, the type name and all usages must be escaped with an `@`:
@@ -224,7 +252,7 @@ static R Create()
 }
 ```
 
-## `ref` to `ref struct argument considered unscoped in `__arglist`
+## `ref` to `ref struct` argument considered unscoped in `__arglist`
 
 ***Introduced in .NET SDK 7.0.100, Visual Studio 2022 version 17.4.***
 

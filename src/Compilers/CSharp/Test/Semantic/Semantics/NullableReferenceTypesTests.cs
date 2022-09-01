@@ -150828,7 +150828,9 @@ class B2 : A2
         [WorkItem(49131, "https://github.com/dotnet/roslyn/issues/49131")]
         [Theory]
         [CombinatorialData]
-        public void UnconstrainedTypeParameter_47(bool useCompilationReference)
+        public void UnconstrainedTypeParameter_47(
+            [CombinatorialValues(LanguageVersion.CSharp9, LanguageVersion.CSharp11)] LanguageVersion languageVersionA,
+            bool useCompilationReference)
         {
             var sourceA =
 @"public abstract class A
@@ -150839,7 +150841,7 @@ class B2 : A2
     public abstract void F2<T>(out T t);
     public abstract void F3<T>(out T? t);
 }";
-            var comp = CreateCompilation(sourceA, parseOptions: TestOptions.Regular9);
+            var comp = CreateCompilation(sourceA, parseOptions: TestOptions.Regular.WithLanguageVersion(languageVersionA));
             comp.VerifyDiagnostics();
             var refA = AsReference(comp, useCompilationReference);
 
@@ -150888,8 +150890,7 @@ class B : A
             comp.VerifyDiagnostics(
                 // (5,26): warning CS8765: Nullability of type of parameter 't' doesn't match overridden member (possibly because of nullability attributes).
                 //     public override void F2<T>(out T? t) where T : default => throw null!;
-                Diagnostic(ErrorCode.WRN_TopLevelNullabilityMismatchInParameterTypeOnOverride, "F2").WithArguments("t").WithLocation(5, 26)
-                );
+                Diagnostic(ErrorCode.WRN_TopLevelNullabilityMismatchInParameterTypeOnOverride, "F2").WithArguments("t").WithLocation(5, 26));
         }
 
         [Theory]
