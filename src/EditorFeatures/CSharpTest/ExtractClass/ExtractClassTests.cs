@@ -976,8 +976,7 @@ internal class MyBase
             }.RunAsync();
         }
 
-        [Fact]
-        [WorkItem(55746, "https://github.com/dotnet/roslyn/issues/55746")]
+        [Fact, WorkItem(55746, "https://github.com/dotnet/roslyn/issues/55746")]
         public async Task TestUsingsInsideNamespace()
         {
             var input = @"// this is my document header
@@ -1043,8 +1042,7 @@ internal class MyBase
             }.RunAsync();
         }
 
-        [Fact]
-        [WorkItem(55746, "https://github.com/dotnet/roslyn/issues/55746")]
+        [Fact, WorkItem(55746, "https://github.com/dotnet/roslyn/issues/55746")]
         public async Task TestUsingsInsideNamespace_FileScopedNamespace()
         {
             var input = @"// this is my document header
@@ -1111,8 +1109,7 @@ namespace ConsoleApp185
             }.RunAsync();
         }
 
-        [Fact]
-        [WorkItem(55746, "https://github.com/dotnet/roslyn/issues/55746")]
+        [Fact, WorkItem(55746, "https://github.com/dotnet/roslyn/issues/55746")]
         public async Task TestUsingsInsideNamespace_NoNamespace()
         {
             var input = @"
@@ -1165,8 +1162,7 @@ internal class MyBase
             }.RunAsync();
         }
 
-        [Fact]
-        [WorkItem(55746, "https://github.com/dotnet/roslyn/issues/55746")]
+        [Fact, WorkItem(55746, "https://github.com/dotnet/roslyn/issues/55746")]
         public async Task TestUsingsInsideNamespace_MultipleNamespaces()
         {
             var input = @"
@@ -2492,6 +2488,166 @@ class C
             }.RunAsync();
         }
 
+        [Fact]
+        [WorkItem(63315, "https://github.com/dotnet/roslyn/issues/63315")]
+        public async Task TestMethodInsideNamespace_NoException()
+        {
+            var code = """
+                namespace N
+                {
+                    class C
+                    {
+                    }
+
+                    public void $$N
+                    {
+                    }
+                }
+                """;
+
+            await new Test()
+            {
+                TestCode = code,
+                FixedCode = code,
+                ExpectedDiagnostics =
+                {
+                    // /0/Test0.cs(7,17): error CS0116: A namespace cannot directly contain members such as fields, methods or statements
+                    DiagnosticResult.CompilerError("CS0116").WithSpan(7, 17, 7, 18),
+                    // /0/Test0.cs(7,17): error CS0547: '<invalid-global-code>.N': property or indexer cannot have void type
+                    DiagnosticResult.CompilerError("CS0547").WithSpan(7, 17, 7, 18).WithArguments("N.<invalid-global-code>.N"),
+                    // /0/Test0.cs(7,17): error CS0548: '<invalid-global-code>.N': property or indexer must have at least one accessor
+                    DiagnosticResult.CompilerError("CS0548").WithSpan(7, 17, 7, 18).WithArguments("N.<invalid-global-code>.N"),
+                }
+            }.RunAsync();
+        }
+
+        [Fact]
+        [WorkItem(55610, "https://github.com/dotnet/roslyn/issues/55610")]
+        public async Task TestMultipleMethodsSelected_WithTypeContainingBaseClass()
+        {
+            var code = """
+                class Base
+                {
+                }
+
+                class Derived : Base
+                {
+                    [|public void M() { }
+                    public void N() { }|]
+                }
+                """;
+
+            await new Test()
+            {
+                TestCode = code,
+                FixedCode = code
+            }.RunAsync();
+        }
+
+        [Fact]
+        [WorkItem(55610, "https://github.com/dotnet/roslyn/issues/55610")]
+        public async Task TestClassSelected_WithTypeContainingBaseClass()
+        {
+            var code = """
+                class Base
+                {
+                }
+
+                class $$Derived : Base
+                {
+                    public void M() { }
+                    public void N() { }
+                }
+                """;
+
+            await new Test()
+            {
+                TestCode = code,
+                FixedCode = code
+            }.RunAsync();
+        }
+
+        [Fact]
+        public async Task TestMultipleMethodsSelected_HighlightedMembersAreSelected()
+        {
+            var code = """
+                class C
+                {
+                    [|public void M() { }
+                    public void N() { }|]
+                    public void O() { }
+                }
+                """;
+
+            var expected1 = """
+                class C : MyBase
+                {
+                    public void O() { }
+                }
+                """;
+
+            var expected2 = """
+                internal class MyBase
+                {
+                    public void M() { }
+                    public void N() { }
+                }
+                """;
+
+            await new Test()
+            {
+                TestCode = code,
+                FixedState =
+                {
+                    Sources =
+                    {
+                        expected1,
+                        expected2
+                    }
+                },
+                FileName = "Test1.cs"
+            }.RunAsync();
+        }
+
+        [Fact]
+        [WorkItem(55402, "https://github.com/dotnet/roslyn/issues/55402")]
+        public async Task TestMemberKeyword()
+        {
+            var code = """
+                class C
+                {
+                    $$public void M() { }
+                }
+                """;
+
+            var expected1 = """
+                class C : MyBase
+                {
+                }
+                """;
+
+            var expected2 = """
+                internal class MyBase
+                {
+                    public void M() { }
+                }
+                """;
+
+            await new Test
+            {
+                TestCode = code,
+                FixedState =
+                {
+                    Sources =
+                    {
+                        expected1,
+                        expected2
+                    }
+                },
+                FileName = "Test1.cs",
+            }.RunAsync();
+        }
+
         private static IEnumerable<(string name, bool makeAbstract)> MakeAbstractSelection(params string[] memberNames)
             => memberNames.Select(m => (m, true));
 
@@ -2502,13 +2658,13 @@ class C
         {
             private readonly IEnumerable<(string name, bool makeAbstract)>? _dialogSelection;
             private readonly bool _sameFile;
-            private readonly bool isClassDeclarationSelection;
+            private readonly bool _isClassDeclarationSelection;
 
             public TestExtractClassOptionsService(IEnumerable<(string name, bool makeAbstract)>? dialogSelection = null, bool sameFile = false, bool isClassDeclarationSelection = false)
             {
                 _dialogSelection = dialogSelection;
                 _sameFile = sameFile;
-                this.isClassDeclarationSelection = isClassDeclarationSelection;
+                _isClassDeclarationSelection = isClassDeclarationSelection;
             }
 
             public string FileName { get; set; } = "MyBase.cs";
@@ -2524,12 +2680,12 @@ class C
                 {
                     if (selectedMembers.IsEmpty)
                     {
-                        Assert.True(isClassDeclarationSelection);
+                        Assert.True(_isClassDeclarationSelection);
                         selections = availableMembers.Select(member => (member, makeAbstract: false));
                     }
                     else
                     {
-                        Assert.False(isClassDeclarationSelection);
+                        Assert.False(_isClassDeclarationSelection);
                         selections = selectedMembers.Select(m => (m, makeAbstract: false));
                     }
                 }

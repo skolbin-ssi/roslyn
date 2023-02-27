@@ -1238,14 +1238,14 @@ class C
                 Diagnostic(ErrorCode.WRN_NullabilityMismatchInAssignment, "r").WithArguments("R<string>", "R<string?>").WithLocation(13, 24),
                 // (15,24): error CS8168: Cannot return local 'r' by reference because it is not a ref local
                 //             return ref r!; // 2
-                Diagnostic(ErrorCode.ERR_RefReturnLocal, "r").WithArguments("r").WithLocation(15, 24),
-                // (15,24): warning CS8619: Nullability of reference types in value of type 'R<string>' doesn't match target type 'R<string?>'.
-                //             return ref r!; // 2
-                Diagnostic(ErrorCode.WRN_NullabilityMismatchInAssignment, "r").WithArguments("R<string>", "R<string?>").WithLocation(15, 24));
+                Diagnostic(ErrorCode.ERR_RefReturnLocal, "r").WithArguments("r").WithLocation(15, 24));
         }
 
-        [Fact, WorkItem(31297, "https://github.com/dotnet/roslyn/issues/31297")]
-        public void SuppressNullableWarning_RefSpanReturn()
+        [WorkItem(31297, "https://github.com/dotnet/roslyn/issues/31297")]
+        [Theory]
+        [InlineData(LanguageVersion.CSharp10)]
+        [InlineData(LanguageVersion.CSharp11)]
+        public void SuppressNullableWarning_RefSpanReturn(LanguageVersion languageVersion)
         {
             var source =
 @"#nullable enable
@@ -1259,7 +1259,7 @@ class C
         if (b)
             return ref y; // 1
         else
-            return ref y!; // 2
+        return ref y!; // 2
     }
     ref Span<string> M2(ref Span<string?> x, bool b)
     {
@@ -1270,39 +1270,17 @@ class C
     }
 }";
 
-            var comp = CreateCompilationWithMscorlibAndSpan(source, parseOptions: TestOptions.Regular10, options: TestOptions.ReleaseDll);
+            var comp = CreateCompilationWithMscorlibAndSpan(source, parseOptions: TestOptions.Regular.WithLanguageVersion(languageVersion), options: TestOptions.ReleaseDll);
             comp.VerifyDiagnostics(
                 // (10,24): error CS8157: Cannot return 'y' by reference because it was initialized to a value that cannot be returned by reference
                 //             return ref y; // 1
                 Diagnostic(ErrorCode.ERR_RefReturnNonreturnableLocal, "y").WithArguments("y").WithLocation(10, 24),
-                // (12,24): error CS8157: Cannot return 'y' by reference because it was initialized to a value that cannot be returned by reference
-                //             return ref y!; // 2
-                Diagnostic(ErrorCode.ERR_RefReturnNonreturnableLocal, "y").WithArguments("y").WithLocation(12, 24),
-                // (17,24): warning CS8619: Nullability of reference types in value of type 'Span<string?>' doesn't match target type 'Span<string>'.
-                //             return ref x; // 3
-                Diagnostic(ErrorCode.WRN_NullabilityMismatchInAssignment, "x").WithArguments("System.Span<string?>", "System.Span<string>").WithLocation(17, 24)
-                );
-
-            comp = CreateCompilationWithMscorlibAndSpan(source, options: TestOptions.ReleaseDll);
-            comp.VerifyDiagnostics(
-                // (10,24): error CS8157: Cannot return 'y' by reference because it was initialized to a value that cannot be returned by reference
-                //             return ref y; // 1
-                Diagnostic(ErrorCode.ERR_RefReturnNonreturnableLocal, "y").WithArguments("y").WithLocation(10, 24),
-                // (12,24): error CS8157: Cannot return 'y' by reference because it was initialized to a value that cannot be returned by reference
-                //             return ref y!; // 2
-                Diagnostic(ErrorCode.ERR_RefReturnNonreturnableLocal, "y").WithArguments("y").WithLocation(12, 24),
-                // (17,24): error CS8166: Cannot return a parameter by reference 'x' because it is not a ref parameter
-                //             return ref x; // 3
-                Diagnostic(ErrorCode.ERR_RefReturnParameter, "x").WithArguments("x").WithLocation(17, 24),
+                // (12,20): error CS8157: Cannot return 'y' by reference because it was initialized to a value that cannot be returned by reference
+                //         return ref y!; // 2
+                Diagnostic(ErrorCode.ERR_RefReturnNonreturnableLocal, "y").WithArguments("y").WithLocation(12, 20),
                 // (17,24): warning CS8619: Nullability of reference types in value of type 'System.Span<string?>' doesn't match target type 'System.Span<string>'.
                 //             return ref x; // 3
-                Diagnostic(ErrorCode.WRN_NullabilityMismatchInAssignment, "x").WithArguments("System.Span<string?>", "System.Span<string>").WithLocation(17, 24),
-                // (19,24): error CS8166: Cannot return a parameter by reference 'x' because it is not a ref parameter
-                //             return ref x!;
-                Diagnostic(ErrorCode.ERR_RefReturnParameter, "x").WithArguments("x").WithLocation(19, 24),
-                // (19,24): warning CS8619: Nullability of reference types in value of type 'System.Span<string?>' doesn't match target type 'System.Span<string>'.
-                //             return ref x!;
-                Diagnostic(ErrorCode.WRN_NullabilityMismatchInAssignment, "x").WithArguments("System.Span<string?>", "System.Span<string>").WithLocation(19, 24)
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInAssignment, "x").WithArguments("System.Span<string?>", "System.Span<string>").WithLocation(17, 24)
                 );
         }
 
@@ -2703,18 +2681,24 @@ unsafe class C<T>
 }";
             var comp = CreateCompilation(source, options: WithNullable(TestOptions.UnsafeReleaseDll, NullableContextOptions.Enable));
             comp.VerifyDiagnostics(
-                // (6,9): error CS0208: Cannot take the address of, get the size of, or declare a pointer to a managed type ('C<string?>')
+                // (6,9): warning CS8500: This takes the address of, gets the size of, or declares a pointer to a managed type ('C<string?>')
                 //         C<string?>* y1 = &x;
-                Diagnostic(ErrorCode.ERR_ManagedAddr, "C<string?>*").WithArguments("C<string?>").WithLocation(6, 9),
-                // (6,26): error CS0208: Cannot take the address of, get the size of, or declare a pointer to a managed type ('C<string>')
+                Diagnostic(ErrorCode.WRN_ManagedAddr, "C<string?>*").WithArguments("C<string?>").WithLocation(6, 9),
+                // (6,26): warning CS8500: This takes the address of, gets the size of, or declares a pointer to a managed type ('C<string>')
                 //         C<string?>* y1 = &x;
-                Diagnostic(ErrorCode.ERR_ManagedAddr, "&x").WithArguments("C<string>").WithLocation(6, 26),
-                // (7,9): error CS0208: Cannot take the address of, get the size of, or declare a pointer to a managed type ('C<string?>')
+                Diagnostic(ErrorCode.WRN_ManagedAddr, "&x").WithArguments("C<string>").WithLocation(6, 26),
+                // (6,26): warning CS8619: Nullability of reference types in value of type 'C<string>*' doesn't match target type 'C<string?>*'.
+                //         C<string?>* y1 = &x;
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInAssignment, "&x").WithArguments("C<string>*", "C<string?>*").WithLocation(6, 26),
+                // (7,9): warning CS8500: This takes the address of, gets the size of, or declares a pointer to a managed type ('C<string?>')
                 //         C<string?>* y2 = &x!;
-                Diagnostic(ErrorCode.ERR_ManagedAddr, "C<string?>*").WithArguments("C<string?>").WithLocation(7, 9),
-                // (7,26): error CS0208: Cannot take the address of, get the size of, or declare a pointer to a managed type ('C<string>')
+                Diagnostic(ErrorCode.WRN_ManagedAddr, "C<string?>*").WithArguments("C<string?>").WithLocation(7, 9),
+                // (7,26): warning CS8500: This takes the address of, gets the size of, or declares a pointer to a managed type ('C<string>')
                 //         C<string?>* y2 = &x!;
-                Diagnostic(ErrorCode.ERR_ManagedAddr, "&x!").WithArguments("C<string>").WithLocation(7, 26),
+                Diagnostic(ErrorCode.WRN_ManagedAddr, "&x!").WithArguments("C<string>").WithLocation(7, 26),
+                // (7,26): warning CS8619: Nullability of reference types in value of type 'C<string>*' doesn't match target type 'C<string?>*'.
+                //         C<string?>* y2 = &x!;
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInAssignment, "&x!").WithArguments("C<string>*", "C<string?>*").WithLocation(7, 26),
                 // (7,27): error CS8598: The suppression operator is not allowed in this context
                 //         C<string?>* y2 = &x!;
                 Diagnostic(ErrorCode.ERR_IllegalSuppression, "x").WithLocation(7, 27)
@@ -18939,9 +18923,9 @@ class C
 ";
             var c2 = CreateCompilation(new[] { source2 }, options: WithNullableEnable());
             c2.VerifyDiagnostics(
-                // (6,9): error CS8331: Cannot assign to variable 'in string' because it is a readonly variable
+                // (6,9): error CS8331: Cannot assign to variable 'xIn' or use it as the right hand side of a ref assignment because it is a readonly variable
                 //         xIn = null;
-                Diagnostic(ErrorCode.ERR_AssignReadonlyNotField, "xIn").WithArguments("variable", "in string").WithLocation(6, 9));
+                Diagnostic(ErrorCode.ERR_AssignReadonlyNotField, "xIn").WithArguments("variable", "xIn").WithLocation(6, 9));
         }
 
         [Fact]
@@ -19188,10 +19172,10 @@ class C
                 // (11,23): error CS1740: Named argument 'x' cannot be specified multiple times
                 //         G(y: y, x: y, x: x);
                 Diagnostic(ErrorCode.ERR_DuplicateNamedArgument, "x").WithArguments("x").WithLocation(11, 23),
-                // (13,9): error CS7036: There is no argument given that corresponds to the required formal parameter 'x' of 'C.G(object, params object?[])'
+                // (13,9): error CS7036: There is no argument given that corresponds to the required parameter 'x' of 'C.G(object, params object?[])'
                 //         G(y: x, y: y);
                 Diagnostic(ErrorCode.ERR_NoCorrespondingArgument, "G").WithArguments("x", "C.G(object, params object?[])").WithLocation(13, 9),
-                // (14,9): error CS7036: There is no argument given that corresponds to the required formal parameter 'x' of 'C.G(object, params object?[])'
+                // (14,9): error CS7036: There is no argument given that corresponds to the required parameter 'x' of 'C.G(object, params object?[])'
                 //         G(y: y, y: x);
                 Diagnostic(ErrorCode.ERR_NoCorrespondingArgument, "G").WithArguments("x", "C.G(object, params object?[])").WithLocation(14, 9),
                 // (15,20): error CS1740: Named argument 'y' cannot be specified multiple times
@@ -19248,7 +19232,7 @@ class C
 }";
             var comp = CreateCompilation(new[] { source }, options: WithNullableEnable());
             comp.VerifyDiagnostics(
-                // (7,19): error CS0231: A params parameter must be the last parameter in a formal parameter list
+                // (7,19): error CS0231: A params parameter must be the last parameter in a parameter list
                 //     static void G(params object[] x, params object[] y)
                 Diagnostic(ErrorCode.ERR_ParamsLast, "params object[] x").WithLocation(7, 19),
                 // (5,11): warning CS8604: Possible null reference argument for parameter 'x' in 'void C.G(params object[] x, params object[] y)'.
@@ -19290,7 +19274,7 @@ class C
                 // (13,20): error CS0225: The params parameter must be a single dimensional array
                 //     static void F3(params object x, params object[] y)
                 Diagnostic(ErrorCode.ERR_ParamsMustBeArray, "params").WithLocation(13, 20),
-                // (13,20): error CS0231: A params parameter must be the last parameter in a formal parameter list
+                // (13,20): error CS0231: A params parameter must be the last parameter in a parameter list
                 //     static void F3(params object x, params object[] y)
                 Diagnostic(ErrorCode.ERR_ParamsLast, "params object x").WithLocation(13, 20),
                 // (6,16): error CS1501: No overload for method 'F2' takes 2 arguments
@@ -32108,6 +32092,29 @@ public class C
                 Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "M1(null)").WithLocation(11, 13));
         }
 
+        [Fact(Skip = "https://github.com/dotnet/roslyn/issues/57491")]
+        public void NotNullIfNotNull_OptionalParameter_NonNullDefault_Lambda()
+        {
+            var source = """
+using System.Diagnostics.CodeAnalysis;
+public class C
+{
+    void M()
+    {
+        var lam1 = [return: NotNullIfNotNull("p")] (string? p = "hello") => p;
+        _ = lam1().ToString();
+        _ = lam1(null).ToString(); // 1
+        _ = lam1("world").ToString();
+    }
+}
+""";
+            var comp = CreateNullableCompilation(new[] { NotNullIfNotNullAttributeDefinition, source });
+            comp.VerifyDiagnostics(
+                // (11,13): warning CS8602: Dereference of a possibly null reference.
+                //         _ = lam1(null).ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "lam1(null)").WithLocation(9, 13));
+        }
+
         [Fact]
         [WorkItem(37903, "https://github.com/dotnet/roslyn/issues/37903")]
         public void NotNullIfNotNull_OptionalParameter_NullDefault()
@@ -32137,7 +32144,33 @@ public class C
                 Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "M1(null)").WithLocation(11, 13));
         }
 
-        [Fact(Skip = "https://github.com/dotnet/roslyn/issues/38801")]
+        [Fact(Skip = "https://github.com/dotnet/roslyn/issues/57491")]
+        public void NotNullIfNotNull_OptionalParameter_NullDefault_Lambda()
+        {
+            var source = """
+using System.Diagnostics.CodeAnalysis;
+public class C
+{
+    void M()
+    {
+        var lam1 = [return: NotNullIfNotNull("p")] (string? p = null) => p;
+        _ = lam1().ToString(); // 1
+        _ = lam1(null).ToString(); // 2
+        _ = lam1("world").ToString();
+    }
+}
+""";
+            var comp = CreateNullableCompilation(new[] { NotNullIfNotNullAttributeDefinition, source });
+            comp.VerifyDiagnostics(
+                // (10,13): warning CS8602: Dereference of a possibly null reference.
+                //         _ = lam1().ToString(); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "lam1()").WithLocation(8, 13),
+                // (11,13): warning CS8602: Dereference of a possibly null reference.
+                //         _ = lam1(null).ToString(); // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "lam1(null)").WithLocation(9, 13));
+        }
+
+        [Fact]
         [WorkItem(37903, "https://github.com/dotnet/roslyn/issues/37903")]
         public void NotNullIfNotNull_OptionalParameter_LocalFunction()
         {
@@ -33593,7 +33626,7 @@ class C
                 // (12,9): warning CS8602: Dereference of a possibly null reference.
                 //         field.ToString(); // 4
                 Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "field").WithLocation(12, 9),
-                // (14,15): error CS0206: A property or indexer may not be passed as an out or ref parameter
+                // (14,15): error CS0206: A non ref-returning property or indexer may not be used as an out or ref value
                 //         M(ref Property); // 5
                 Diagnostic(ErrorCode.ERR_RefProperty, "Property").WithLocation(14, 15),
                 // (15,20): warning CS8625: Cannot convert null literal to non-nullable reference type.
@@ -60309,6 +60342,43 @@ class Program
                 Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "(new { P = new[] { o }}).P[0]").WithLocation(5, 9));
         }
 
+        [Fact, WorkItem(65053, "https://github.com/dotnet/roslyn/issues/65053")]
+        public void AnonymousObjectCreation_QueryClause_WithErrors()
+        {
+            var source = """
+                #nullable enable
+                class C
+                {
+                    void M()
+                    {
+                        _ = from itemA in new[] { new { X = (int?)1 } }.AsQueryable()
+                            join itemB in new[] { new { X = (int?)2 } }.AsQueryable() on itemA.X equals itemB.X into itemBGroup
+                            from itemB in itemBGroup.DefaultIfEmpty()
+                            select itemB == null ? null : itemB.X;
+                    }
+                }
+                """;
+            var comp = CreateCompilation(source).VerifyDiagnostics(
+                // (6,57): error CS1061: '<anonymous type: int? X>[]' does not contain a definition for 'AsQueryable' and no accessible extension method 'AsQueryable' accepting a first argument of type '<anonymous type: int? X>[]' could be found (are you missing a using directive or an assembly reference?)
+                //         _ = from itemA in new[] { new { X = (int?)1 } }.AsQueryable()
+                Diagnostic(ErrorCode.ERR_NoSuchMemberOrExtension, "AsQueryable").WithArguments("<anonymous type: int? X>[]", "AsQueryable").WithLocation(6, 57),
+                // (7,57): error CS1061: '<anonymous type: int? X>[]' does not contain a definition for 'AsQueryable' and no accessible extension method 'AsQueryable' accepting a first argument of type '<anonymous type: int? X>[]' could be found (are you missing a using directive or an assembly reference?)
+                //             join itemB in new[] { new { X = (int?)2 } }.AsQueryable() on itemA.X equals itemB.X into itemBGroup
+                Diagnostic(ErrorCode.ERR_NoSuchMemberOrExtension, "AsQueryable").WithArguments("<anonymous type: int? X>[]", "AsQueryable").WithLocation(7, 57));
+
+            var syntaxTree = comp.SyntaxTrees.Single();
+            var model = comp.GetSemanticModel(syntaxTree);
+
+            var declarators = syntaxTree.GetRoot().DescendantNodes().OfType<AnonymousObjectMemberDeclaratorSyntax>().ToImmutableArray();
+            Assert.Equal(2, declarators.Length);
+            Assert.All(declarators, declarator =>
+            {
+                var typeInfo = model.GetTypeInfo(declarator.Expression);
+                Assert.Equal(CodeAnalysis.NullableFlowState.NotNull, typeInfo.Nullability.FlowState);
+                Assert.Equal(CodeAnalysis.NullableAnnotation.Annotated, typeInfo.Nullability.Annotation);
+            });
+        }
+
         [Fact]
         public void This()
         {
@@ -63311,6 +63381,41 @@ class C
                 // (36,13): warning CS8602: Dereference of a possibly null reference.
                 //             x4.ToString(); // 5
                 Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x4").WithLocation(36, 13));
+        }
+
+        [Fact, WorkItem(65061, "https://github.com/dotnet/roslyn/issues/65061")]
+        public void LocalFunctions_Speculation()
+        {
+            var source1 = """
+                #nullable enable
+                #pragma warning disable CS8321 // The local function is declared but never used
+                #pragma warning disable CS0219 // The variable 'o' is assigned but its value is never used
+                void func() { object? o = null; }
+                void target() { object? o = null; }
+                """;
+            var source2 = """
+                void target() { object? o = ""; }
+                """;
+
+            var comp1 = CreateCompilation(source1).VerifyDiagnostics();
+            var tree1 = comp1.SyntaxTrees.Single();
+            var model1 = comp1.GetSemanticModel(tree1);
+
+            var function1 = tree1.GetRoot().DescendantNodes().OfType<LocalFunctionStatementSyntax>().Last();
+            Assert.Equal("target", function1.Identifier.ValueText);
+
+            var tree2 = CSharpSyntaxTree.ParseText(source2);
+            var function2 = tree2.GetRoot().DescendantNodes().OfType<LocalFunctionStatementSyntax>().Single();
+            Assert.Equal("target", function2.Identifier.ValueText);
+
+            Assert.True(model1.TryGetSpeculativeSemanticModel(function1.SpanStart, function2, out var model2));
+
+            var object2 = tree2.GetRoot().DescendantNodes().OfType<PredefinedTypeSyntax>()
+                .Single(s => s.Keyword.ValueText == "object");
+            Assert.Equal("object?", object2.Parent.ToString());
+
+            var objectSymbol2 = model2.GetSymbolInfo(object2).Symbol;
+            Assert.Equal("System.Object", objectSymbol2.ToTestDisplayString());
         }
 
         [Fact]
@@ -75416,28 +75521,27 @@ class Program
                 new[] { source },
                 parseOptions: TestOptions.Regular7, skipUsesIsNullable: true);
             comp.VerifyDiagnostics(
-                // (5,11): error CS8652: The feature 'nullable reference types' is not available in C# 7.0. Please use language version 8.0 or greater.
+                // (3,25): error CS8107: Feature 'nullable reference types' is not available in C# 7.0. Please use language version 8.0 or greater.
+                //     static void F(string? s) // 1
+                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion7, "?").WithArguments("nullable reference types", "8.0").WithLocation(3, 25),
+                // (5,15): error CS8107: Feature 'nullable reference types' is not available in C# 7.0. Please use language version 8.0 or greater.
                 //         G(null!); // 2, 3
-                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion7, "null!").WithArguments("nullable reference types", "8.0").WithLocation(5, 11),
-                // (6,11): error CS8652: The feature 'nullable reference types' is not available in C# 7.0. Please use language version 8.0 or greater.
+                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion7, "!").WithArguments("nullable reference types", "8.0").WithLocation(5, 15),
+                // (6,27): error CS8107: Feature 'nullable reference types' is not available in C# 7.0. Please use language version 8.0 or greater.
                 //         G((null as string)!); // 4, 5
-                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion7, "(null as string)!").WithArguments("nullable reference types", "8.0").WithLocation(6, 11),
-                // (7,11): error CS8652: The feature 'nullable reference types' is not available in C# 7.0. Please use language version 8.0 or greater.
+                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion7, "!").WithArguments("nullable reference types", "8.0").WithLocation(6, 27),
+                // (7,26): error CS8107: Feature 'nullable reference types' is not available in C# 7.0. Please use language version 8.0 or greater.
                 //         G(default(string)!); // 6, 7
-                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion7, "default(string)!").WithArguments("nullable reference types", "8.0").WithLocation(7, 11),
-                // (8,11): error CS8652: The feature 'nullable reference types' is not available in C# 7.0. Please use language version 8.0 or greater.
+                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion7, "!").WithArguments("nullable reference types", "8.0").WithLocation(7, 26),
+                // (8,18): error CS8107: Feature 'nullable reference types' is not available in C# 7.0. Please use language version 8.0 or greater.
                 //         G(default!); // 8, 9, 10
-                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion7, "default!").WithArguments("nullable reference types", "8.0").WithLocation(8, 11),
+                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion7, "!").WithArguments("nullable reference types", "8.0").WithLocation(8, 18),
                 // (8,11): error CS8107: Feature 'default literal' is not available in C# 7.0. Please use language version 7.1 or greater.
                 //         G(default!); // 8, 9, 10
                 Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion7, "default").WithArguments("default literal", "7.1").WithLocation(8, 11),
-                // (9,11): error CS8652: The feature 'nullable reference types' is not available in C# 7.0. Please use language version 8.0 or greater.
+                // (9,12): error CS8107: Feature 'nullable reference types' is not available in C# 7.0. Please use language version 8.0 or greater.
                 //         G(s!); // 11, 12
-                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion7, "s!").WithArguments("nullable reference types", "8.0").WithLocation(9, 11),
-                // (3,25): error CS8652: The feature 'nullable reference types' is not available in C# 7.0. Please use language version 8.0 or greater.
-                //     static void F(string? s) // 1
-                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion7, "?").WithArguments("nullable reference types", "8.0").WithLocation(3, 25)
-                );
+                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion7, "!").WithArguments("nullable reference types", "8.0").WithLocation(9, 12));
 
             comp = CreateCompilation(
                 new[] { source }, options: WithNullableEnable(),
@@ -76853,18 +76957,18 @@ struct S2<T>
                 new[] { source },
                 parseOptions: TestOptions.Regular7);
             comp.VerifyDiagnostics(
-                // (5,11): error CS8652: The feature 'nullable reference types' is not available in C# 7.0. Please use language version 8.0 or greater.
+                // (5,12): error CS8107: Feature 'nullable reference types' is not available in C# 7.0. Please use language version 8.0 or greater.
                 //         G(1!);
-                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion7, "1!").WithArguments("nullable reference types", "8.0").WithLocation(5, 11),
-                // (6,11): error CS8652: The feature 'nullable reference types' is not available in C# 7.0. Please use language version 8.0 or greater.
+                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion7, "!").WithArguments("nullable reference types", "8.0").WithLocation(5, 12),
+                // (6,23): error CS8107: Feature 'nullable reference types' is not available in C# 7.0. Please use language version 8.0 or greater.
                 //         G(((int?)null)!);
-                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion7, "((int?)null)!").WithArguments("nullable reference types", "8.0").WithLocation(6, 11),
-                // (7,11): error CS8652: The feature 'nullable reference types' is not available in C# 7.0. Please use language version 8.0 or greater.
+                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion7, "!").WithArguments("nullable reference types", "8.0").WithLocation(6, 23),
+                // (7,21): error CS8107: Feature 'nullable reference types' is not available in C# 7.0. Please use language version 8.0 or greater.
                 //         G(default(S)!);
-                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion7, "default(S)!").WithArguments("nullable reference types", "8.0").WithLocation(7, 11),
-                // (8,13): error CS8652: The feature 'nullable reference types' is not available in C# 7.0. Please use language version 8.0 or greater.
+                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion7, "!").WithArguments("nullable reference types", "8.0").WithLocation(7, 21),
+                // (8,29): error CS8107: Feature 'nullable reference types' is not available in C# 7.0. Please use language version 8.0 or greater.
                 //         _ = new S2<object>()!;
-                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion7, "new S2<object>()!").WithArguments("nullable reference types", "8.0").WithLocation(8, 13));
+                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion7, "!").WithArguments("nullable reference types", "8.0").WithLocation(8, 29));
         }
 
         [Fact, WorkItem(29642, "https://github.com/dotnet/roslyn/issues/29642")]
@@ -76944,16 +77048,15 @@ class C
             // Feature disabled (C# 7).
             comp = CreateCompilation(new[] { source }, parseOptions: TestOptions.Regular7);
             comp.VerifyDiagnostics(
-                // (6,13): error CS8652: The feature 'nullable reference types' is not available in C# 7.0. Please use language version 8.0 or greater.
+                // (6,20): error CS8107: Feature 'nullable reference types' is not available in C# 7.0. Please use language version 8.0 or greater.
                 //         _ = tStruct!;
-                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion7, "tStruct!").WithArguments("nullable reference types", "8.0").WithLocation(6, 13),
-                // (7,13): error CS8652: The feature 'nullable reference types' is not available in C# 7.0. Please use language version 8.0 or greater.
+                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion7, "!").WithArguments("nullable reference types", "8.0").WithLocation(6, 20),
+                // (7,17): error CS8107: Feature 'nullable reference types' is not available in C# 7.0. Please use language version 8.0 or greater.
                 //         _ = tRef!;
-                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion7, "tRef!").WithArguments("nullable reference types", "8.0").WithLocation(7, 13),
-                // (8,13): error CS8652: The feature 'nullable reference types' is not available in C# 7.0. Please use language version 8.0 or greater.
+                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion7, "!").WithArguments("nullable reference types", "8.0").WithLocation(7, 17),
+                // (8,27): error CS8107: Feature 'nullable reference types' is not available in C# 7.0. Please use language version 8.0 or greater.
                 //         _ = tUnconstrained!;
-                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion7, "tUnconstrained!").WithArguments("nullable reference types", "8.0").WithLocation(8, 13)
-                );
+                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion7, "!").WithArguments("nullable reference types", "8.0").WithLocation(8, 27));
         }
 
         [Fact]
@@ -78146,7 +78249,7 @@ class Client
                 // (3,56): warning CS8625: Cannot convert null literal to non-nullable reference type.
                 //     static partial void F(object? x = null, object y = null);
                 Diagnostic(ErrorCode.WRN_NullAsNonNullable, "null").WithLocation(3, 56),
-                // (10,9): error CS7036: There is no argument given that corresponds to the required formal parameter 'x' of 'C.G(object, object?)'
+                // (10,9): error CS7036: There is no argument given that corresponds to the required parameter 'x' of 'C.G(object, object?)'
                 //         G();
                 Diagnostic(ErrorCode.ERR_NoCorrespondingArgument, "G").WithArguments("x", "C.G(object, object?)").WithLocation(10, 9)
                 );
@@ -78499,6 +78602,46 @@ public class Override2 : Base2<string>
                 //     public override void M(string s) { } // 2
                 Diagnostic(ErrorCode.WRN_TopLevelNullabilityMismatchInParameterTypeOnOverride, "M").WithArguments("s").WithLocation(19, 26)
                 );
+        }
+
+        [Fact]
+        public void LambdaParameterDefaultValue_01()
+        {
+            var source = """
+using System.Diagnostics.CodeAnalysis;
+class C
+{
+    void M()
+    {
+        var lam1 = (object o = null) => {}; // 1
+        var lam2 = (object o = null!) => {};
+        var lam3 = (object o = default) => {}; // 2
+        var lam4 = (object o = default!) => {};
+        var lam5 = ([AllowNull] string s = null) => {}; // 3
+        var lam6 = ([DisallowNull] string? s = null) => {}; // 4
+        var lam7 = ([DisallowNull] string? s = "a") => {}; // 5
+    }
+}
+""";
+            CreateCompilation(new[] { source, AllowNullAttributeDefinition, DisallowNullAttributeDefinition }, options: WithNullableEnable()).VerifyDiagnostics(
+                // (6,32): warning CS8625: Cannot convert null literal to non-nullable reference type.
+                //         var lam1 = (object o = null) => {}; // 1
+                Diagnostic(ErrorCode.WRN_NullAsNonNullable, "null").WithLocation(6, 32),
+                // (8,32): warning CS8625: Cannot convert null literal to non-nullable reference type.
+                //         var lam3 = (object o = default) => {}; // 2
+                Diagnostic(ErrorCode.WRN_NullAsNonNullable, "default").WithLocation(8, 32),
+                // (10,20): warning CS8622: Nullability of reference types in type of parameter 's' of 'lambda expression' doesn't match the target delegate '<anonymous delegate>' (possibly because of nullability attributes).
+                //         var lam5 = ([AllowNull] string s = null) => {}; // 3
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInParameterTypeOfTargetDelegate, "([AllowNull] string s = null) =>").WithArguments("s", "lambda expression", "<anonymous delegate>").WithLocation(10, 20),
+                // (11,20): warning CS8622: Nullability of reference types in type of parameter 's' of 'lambda expression' doesn't match the target delegate '<anonymous delegate>' (possibly because of nullability attributes).
+                //         var lam6 = ([DisallowNull] string? s = null) => {}; // 4
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInParameterTypeOfTargetDelegate, "([DisallowNull] string? s = null) =>").WithArguments("s", "lambda expression", "<anonymous delegate>").WithLocation(11, 20),
+                // (11,48): warning CS8625: Cannot convert null literal to non-nullable reference type.
+                //         var lam6 = ([DisallowNull] string? s = null) => {}; // 4
+                Diagnostic(ErrorCode.WRN_NullAsNonNullable, "null").WithLocation(11, 48),
+                // (12,20): warning CS8622: Nullability of reference types in type of parameter 's' of 'lambda expression' doesn't match the target delegate '<anonymous delegate>' (possibly because of nullability attributes).
+                //         var lam7 = ([DisallowNull] string? s = "a") => {}; // 5
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInParameterTypeOfTargetDelegate, @"([DisallowNull] string? s = ""a"") =>").WithArguments("s", "lambda expression", "<anonymous delegate>").WithLocation(12, 20));
         }
 
         [Fact]
@@ -79338,9 +79481,9 @@ class C
 }";
             var comp = CreateCompilationWithMscorlib46(new[] { source }, options: WithNullableEnable());
             comp.VerifyDiagnostics(
-                // (5,30): error CS1997: Since 'C.F0()' is an async method that returns 'Task', a return keyword must not be followed by an object expression. Did you intend to return 'Task<T>'?
+                // (5,30): error CS1997: Since 'C.F0()' is an async method that returns 'System.Threading.Tasks.Task', a return keyword must not be followed by an object expression
                 //     static async Task F0() { return null; }
-                Diagnostic(ErrorCode.ERR_TaskRetNoObjectRequired, "return").WithArguments("C.F0()").WithLocation(5, 30),
+                Diagnostic(ErrorCode.ERR_TaskRetNoObjectRequired, "return").WithArguments("C.F0()", "System.Threading.Tasks.Task").WithLocation(5, 30),
                 // (6,39): warning CS8603: Possible null reference return.
                 //     static async Task<string> F1() => null;
                 Diagnostic(ErrorCode.WRN_NullReferenceReturn, "null").WithLocation(6, 39),
@@ -79353,9 +79496,9 @@ class C
                 // (10,59): warning CS8603: Possible null reference return.
                 //     static async Task<T> F5<T>() where T : class { return null; }
                 Diagnostic(ErrorCode.WRN_NullReferenceReturn, "null").WithLocation(10, 59),
-                // (12,31): error CS1997: Since 'C.G0()' is an async method that returns 'Task', a return keyword must not be followed by an object expression. Did you intend to return 'Task<T>'?
+                // (12,31): error CS1997: Since 'C.G0()' is an async method that returns 'System.Threading.Tasks.Task', a return keyword must not be followed by an object expression
                 //     static async Task? G0() { return null; }
-                Diagnostic(ErrorCode.ERR_TaskRetNoObjectRequired, "return").WithArguments("C.G0()").WithLocation(12, 31),
+                Diagnostic(ErrorCode.ERR_TaskRetNoObjectRequired, "return").WithArguments("C.G0()", "System.Threading.Tasks.Task").WithLocation(12, 31),
                 // (13,40): warning CS8603: Possible null reference return.
                 //     static async Task<string>? G1() => null;
                 Diagnostic(ErrorCode.WRN_NullReferenceReturn, "null").WithLocation(13, 40),
@@ -81759,7 +81902,7 @@ class Program
 }";
             var comp = CreateCompilation(source, options: WithNullableEnable());
             comp.VerifyDiagnostics(
-                // (6,21): error CS7036: There is no argument given that corresponds to the required formal parameter 'item2' of '(object?, string).ValueTuple(object?, string)'
+                // (6,21): error CS7036: There is no argument given that corresponds to the required parameter 'item2' of '(object?, string).ValueTuple(object?, string)'
                 //         var t = new ValueTuple<object?, string>(1);
                 Diagnostic(ErrorCode.ERR_NoCorrespondingArgument, "ValueTuple<object?, string>").WithArguments("item2", "(object?, string).ValueTuple(object?, string)").WithLocation(6, 21),
                 // (7,21): error CS1729: '(object?, string)' does not contain a constructor that takes 3 arguments
@@ -89846,12 +89989,12 @@ class C
             var comp = CreateCompilation(new[] { source }, options: WithNullableEnable(TestOptions.UnsafeDebugDll));
             comp.VerifyTypes();
             comp.VerifyDiagnostics(
-                // (4,28): error CS0208: Cannot take the address of, get the size of, or declare a pointer to a managed type ('object')
+                // (4,28): warning CS8500: This takes the address of, gets the size of, or declares a pointer to a managed type ('object')
                 //     static void G(object?* x, object* y) // 1
-                Diagnostic(ErrorCode.ERR_ManagedAddr, "x").WithArguments("object").WithLocation(4, 28),
-                // (4,39): error CS0208: Cannot take the address of, get the size of, or declare a pointer to a managed type ('object')
+                Diagnostic(ErrorCode.WRN_ManagedAddr, "x").WithArguments("object").WithLocation(4, 28),
+                // (4,39): warning CS8500: This takes the address of, gets the size of, or declares a pointer to a managed type ('object')
                 //     static void G(object?* x, object* y) // 1
-                Diagnostic(ErrorCode.ERR_ManagedAddr, "y").WithArguments("object").WithLocation(4, 39),
+                Diagnostic(ErrorCode.WRN_ManagedAddr, "y").WithArguments("object").WithLocation(4, 39),
                 // (7,9): error CS0306: The type 'object*' may not be used as a type argument
                 //         F(x, x)/*T:object?**/; // 2
                 Diagnostic(ErrorCode.ERR_BadTypeArgument, "F").WithArguments("object*").WithLocation(7, 9),
@@ -89879,9 +90022,9 @@ class C
                 // (15,9): error CS0306: The type 'object*' may not be used as a type argument
                 //         F(z, z)/*T:object**/;  // 10
                 Diagnostic(ErrorCode.ERR_BadTypeArgument, "F").WithArguments("object*").WithLocation(15, 9),
-                // (20,27): error CS0208: Cannot take the address of, get the size of, or declare a pointer to a managed type ('object')
+                // (20,27): warning CS8500: This takes the address of, gets the size of, or declares a pointer to a managed type ('object')
                 //     public static object* z = null; // 11
-                Diagnostic(ErrorCode.ERR_ManagedAddr, "z").WithArguments("object").WithLocation(20, 27)
+                Diagnostic(ErrorCode.WRN_ManagedAddr, "z").WithArguments("object").WithLocation(20, 27)
                 );
         }
 
@@ -112806,10 +112949,20 @@ interface I2
                 Diagnostic(ErrorCode.ERR_MissingPredefinedMember).WithArguments("System.AttributeUsageAttribute", "AllowMultiple").WithLocation(1, 1),
                 // error CS0656: Missing compiler required member 'System.AttributeUsageAttribute.Inherited'
                 Diagnostic(ErrorCode.ERR_MissingPredefinedMember).WithArguments("System.AttributeUsageAttribute", "Inherited").WithLocation(1, 1),
-                // error CS0518: Predefined type 'System.Byte' is not defined or imported
-                Diagnostic(ErrorCode.ERR_PredefinedTypeNotFound).WithArguments("System.Byte").WithLocation(1, 1),
                 // error CS0518: Predefined type 'System.Attribute' is not defined or imported
                 Diagnostic(ErrorCode.ERR_PredefinedTypeNotFound).WithArguments("System.Attribute").WithLocation(1, 1),
+                // error CS0518: Predefined type 'System.Byte' is not defined or imported
+                Diagnostic(ErrorCode.ERR_PredefinedTypeNotFound).WithArguments("System.Byte").WithLocation(1, 1),
+                // error CS0656: Missing compiler required member 'System.AttributeUsageAttribute..ctor'
+                Diagnostic(ErrorCode.ERR_MissingPredefinedMember).WithArguments("System.AttributeUsageAttribute", ".ctor").WithLocation(1, 1),
+                // error CS0656: Missing compiler required member 'System.AttributeUsageAttribute.AllowMultiple'
+                Diagnostic(ErrorCode.ERR_MissingPredefinedMember).WithArguments("System.AttributeUsageAttribute", "AllowMultiple").WithLocation(1, 1),
+                // error CS0656: Missing compiler required member 'System.AttributeUsageAttribute.Inherited'
+                Diagnostic(ErrorCode.ERR_MissingPredefinedMember).WithArguments("System.AttributeUsageAttribute", "Inherited").WithLocation(1, 1),
+                // error CS0518: Predefined type 'System.Attribute' is not defined or imported
+                Diagnostic(ErrorCode.ERR_PredefinedTypeNotFound).WithArguments("System.Attribute").WithLocation(1, 1),
+                // error CS0518: Predefined type 'System.Int32' is not defined or imported
+                Diagnostic(ErrorCode.ERR_PredefinedTypeNotFound).WithArguments("System.Int32").WithLocation(1, 1),
                 // error CS0656: Missing compiler required member 'System.AttributeUsageAttribute..ctor'
                 Diagnostic(ErrorCode.ERR_MissingPredefinedMember).WithArguments("System.AttributeUsageAttribute", ".ctor").WithLocation(1, 1),
                 // error CS0656: Missing compiler required member 'System.AttributeUsageAttribute.AllowMultiple'
@@ -119640,7 +119793,6 @@ class C
   public static C<T> GetC<T>(T t) => new C<T> { FieldWithInferredAnnotation = t };
   public static T GetT<T>(T t) => t;
 }";
-
 
             CreateCompilation(source, options: WithNullableEnable()).VerifyDiagnostics(
                 // (5,12): warning CS8618: Non-nullable field 'FieldWithInferredAnnotation' must contain a non-null value when exiting constructor. Consider declaring the field as nullable.
@@ -127124,13 +127276,13 @@ class C
 }";
             var comp = CreateNullableCompilation(new[] { source, NotNullWhenAttributeDefinition });
             comp.VerifyDiagnostics(
-                // (13,9): error CS8762: Parameter 's' must have a non-null value when exiting with 'true'.
+                // (13,9): warning CS8762: Parameter 's' must have a non-null value when exiting with 'true'.
                 //         return true; // 1
                 Diagnostic(ErrorCode.WRN_ParameterConditionallyDisallowsNull, "return true;").WithArguments("s", "true").WithLocation(13, 9),
-                // (18,9): error CS8331: Cannot assign to variable 'in string?' because it is a readonly variable
+                // (18,9): error CS8331: Cannot assign to variable 's' or use it as the right hand side of a ref assignment because it is a readonly variable
                 //         s = null; // 2
-                Diagnostic(ErrorCode.ERR_AssignReadonlyNotField, "s").WithArguments("variable", "in string?").WithLocation(18, 9),
-                // (25,9): error CS8762: Parameter 's' must have a non-null value when exiting with 'true'.
+                Diagnostic(ErrorCode.ERR_AssignReadonlyNotField, "s").WithArguments("variable", "s").WithLocation(18, 9),
+                // (25,9): warning CS8762: Parameter 's' must have a non-null value when exiting with 'true'.
                 //         return true; // 3
                 Diagnostic(ErrorCode.WRN_ParameterConditionallyDisallowsNull, "return true;").WithArguments("s", "true").WithLocation(25, 9)
                 );
@@ -130952,7 +131104,7 @@ class Program
 }";
             var comp = CreateCompilation(source, options: WithNullableEnable());
             comp.VerifyDiagnostics(
-                // (9,34): error CS7036: There is no argument given that corresponds to the required formal parameter 'z' of 'C.Deconstruct(out object, out object, out object)'
+                // (9,34): error CS7036: There is no argument given that corresponds to the required parameter 'z' of 'C.Deconstruct(out object, out object, out object)'
                 //         (object? x, object? y) = new C();
                 Diagnostic(ErrorCode.ERR_NoCorrespondingArgument, "new C()").WithArguments("z", "C.Deconstruct(out object, out object, out object)").WithLocation(9, 34),
                 // (9,34): error CS8129: No suitable 'Deconstruct' instance or extension method was found for type 'C', with 2 out parameters and a void return type.
@@ -131791,9 +131943,9 @@ class Program
 }";
             var comp = CreateCompilation(source, options: WithNullableEnable());
             comp.VerifyDiagnostics(
-                // (8,9): error CS1997: Since 'Program.G(object?)' is an async method that returns 'Task', a return keyword must not be followed by an object expression. Did you intend to return 'Task<T>'?
+                // (8,9): error CS1997: Since 'Program.G(object?)' is an async method that returns 'System.Threading.Tasks.Task', a return keyword must not be followed by an object expression
                 //         return F(y);
-                Diagnostic(ErrorCode.ERR_TaskRetNoObjectRequired, "return").WithArguments("Program.G(object?)").WithLocation(8, 9),
+                Diagnostic(ErrorCode.ERR_TaskRetNoObjectRequired, "return").WithArguments("Program.G(object?)", "System.Threading.Tasks.Task").WithLocation(8, 9),
                 // (8,18): warning CS8604: Possible null reference argument for parameter 'x' in 'object Program.F(object x)'.
                 //         return F(y);
                 Diagnostic(ErrorCode.WRN_NullReferenceArgument, "y").WithArguments("x", "object Program.F(object x)").WithLocation(8, 18));
@@ -131834,9 +131986,9 @@ class Program
 }";
             var comp = CreateCompilation(source, options: WithNullableEnable());
             comp.VerifyDiagnostics(
-                // (7,9): error CS1997: Since 'Program.F()' is an async method that returns 'Task', a return keyword must not be followed by an object expression. Did you intend to return 'Task<T>'?
+                // (7,9): error CS1997: Since 'Program.F()' is an async method that returns 'System.Threading.Tasks.Task', a return keyword must not be followed by an object expression
                 //         return (null, string.Empty);
-                Diagnostic(ErrorCode.ERR_TaskRetNoObjectRequired, "return").WithArguments("Program.F()").WithLocation(7, 9));
+                Diagnostic(ErrorCode.ERR_TaskRetNoObjectRequired, "return").WithArguments("Program.F()", "System.Threading.Tasks.Task").WithLocation(7, 9));
         }
 
         [Fact]
@@ -131878,9 +132030,9 @@ class Program
 }";
             var comp = CreateCompilation(source, options: WithNullableEnable());
             comp.VerifyDiagnostics(
-                // (9,13): error CS8031: Async lambda expression converted to a 'Task' returning delegate cannot return a value. Did you intend to return 'Task<T>'?
+                // (9,13): error CS8031: Async lambda expression converted to a 'System.Threading.Tasks.Task' returning delegate cannot return a value
                 //             return (null, string.Empty);
-                Diagnostic(ErrorCode.ERR_TaskRetNoObjectRequiredLambda, "return").WithLocation(9, 13));
+                Diagnostic(ErrorCode.ERR_TaskRetNoObjectRequiredLambda, "return").WithArguments("System.Threading.Tasks.Task").WithLocation(9, 13));
         }
 
         [Fact]
@@ -137757,7 +137909,7 @@ class C
 ";
             var comp = CreateCompilation(source);
             comp.VerifyDiagnostics(
-                // (7,9): error CS7036: There is no argument given that corresponds to the required formal parameter 'objA' of 'object.ReferenceEquals(object, object)'
+                // (7,9): error CS7036: There is no argument given that corresponds to the required parameter 'objA' of 'object.ReferenceEquals(object, object)'
                 //         ReferenceEquals(
                 Diagnostic(ErrorCode.ERR_NoCorrespondingArgument, "ReferenceEquals").WithArguments("objA", "object.ReferenceEquals(object, object)").WithLocation(7, 9),
                 // (7,25): error CS1026: ) expected
@@ -137812,10 +137964,10 @@ class C
                 // (9,16): error CS1501: No overload for method 'Equals' takes 3 arguments
                 //         object.Equals(null, null, null);
                 Diagnostic(ErrorCode.ERR_BadArgCount, "Equals").WithArguments("Equals", "3").WithLocation(9, 16),
-                // (11,16): error CS7036: There is no argument given that corresponds to the required formal parameter 'objA' of 'object.ReferenceEquals(object, object)'
+                // (11,16): error CS7036: There is no argument given that corresponds to the required parameter 'objA' of 'object.ReferenceEquals(object, object)'
                 //         object.ReferenceEquals();
                 Diagnostic(ErrorCode.ERR_NoCorrespondingArgument, "ReferenceEquals").WithArguments("objA", "object.ReferenceEquals(object, object)").WithLocation(11, 16),
-                // (12,16): error CS7036: There is no argument given that corresponds to the required formal parameter 'objB' of 'object.ReferenceEquals(object, object)'
+                // (12,16): error CS7036: There is no argument given that corresponds to the required parameter 'objB' of 'object.ReferenceEquals(object, object)'
                 //         object.ReferenceEquals(1);
                 Diagnostic(ErrorCode.ERR_NoCorrespondingArgument, "ReferenceEquals").WithArguments("objB", "object.ReferenceEquals(object, object)").WithLocation(12, 16),
                 // (13,16): error CS1501: No overload for method 'ReferenceEquals' takes 3 arguments
@@ -140383,7 +140535,7 @@ class C
 ";
             var comp = CreateCompilation(source, options: WithNullableEnable());
             comp.VerifyDiagnostics(
-                // (17,21): error CS7036: There is no argument given that corresponds to the required formal parameter 'comparand' of 'Interlocked.CompareExchange(ref object?, object?, object?)'
+                // (17,21): error CS7036: There is no argument given that corresponds to the required parameter 'comparand' of 'Interlocked.CompareExchange(ref object?, object?, object?)'
                 //         Interlocked.CompareExchange(ref location, new object()); // 1
                 Diagnostic(ErrorCode.ERR_NoCorrespondingArgument, "CompareExchange").WithArguments("comparand", "System.Threading.Interlocked.CompareExchange(ref object?, object?, object?)").WithLocation(17, 21),
                 // (18,13): warning CS8602: Dereference of a possibly null reference.
@@ -151500,7 +151652,6 @@ class Handler
                 );
         }
 
-
         [Fact]
         [WorkItem(44049, "https://github.com/dotnet/roslyn/issues/44049")]
         public void MemberNotNull_InstanceMemberOnStaticMethod()
@@ -156133,7 +156284,7 @@ struct D<T>
                 // (7,11): error CS0208: Cannot take the address of, get the size of, or declare a pointer to a managed type ('D<object>')
                 // 		var a = stackalloc[] { M(o) };
                 Diagnostic(ErrorCode.ERR_ManagedAddr, "stackalloc[] { M(o) }").WithArguments("D<object>").WithLocation(7, 11),
-                // (15,14): warning CS0649: Field 'D<T>.Item' is never assigned to, and will always have its default value
+                // (15,14): warning CS0649: Field 'D<T>.Item' is never assigned to, and will always have its default value 
                 //     public T Item;
                 Diagnostic(ErrorCode.WRN_UnassignedInternalField, "Item").WithArguments("D<T>.Item", "").WithLocation(15, 14)
                 );
@@ -156452,6 +156603,270 @@ public class C
                 //         return ("a", S.B);
                 Diagnostic(ErrorCode.ERR_NoSuchMember, "B").WithArguments("S", "B").WithLocation(12, 24)
                 );
+        }
+
+        [Fact, WorkItem(64599, "https://github.com/dotnet/roslyn/issues/64599")]
+        public void LambdaNullabilityCycle()
+        {
+            var source = """
+#nullable enable
+using System;
+class Program
+{
+    static void Main()
+    {
+        var lam = ([A(nameof(lam))] int x) => { };
+    }
+}
+[AttributeUsage(AttributeTargets.Parameter)]
+class A : Attribute
+{
+    public A(string _) {}
+}
+""";
+            CreateCompilation(source).VerifyDiagnostics(
+                // (7,30): error CS0841: Cannot use local variable 'lam' before it is declared
+                //         var lam = ([A(nameof(lam))] int x) => { };
+                Diagnostic(ErrorCode.ERR_VariableUsedBeforeDeclaration, "lam").WithArguments("lam").WithLocation(7, 30));
+        }
+
+        [Fact, WorkItem(61516, "https://github.com/dotnet/roslyn/issues/61516")]
+        public void NestedMethodAnalysis_Repro61516()
+        {
+            var source = """
+#nullable enable
+using System.Linq;
+
+static void DoSomething()
+{
+    var plans = Enumerable.Empty<Plan>();
+
+    var filtered = plans.Select(
+            plan => new { Value = plan.Schedule }
+        );
+}
+
+DoSomething();
+
+class Plan
+{
+    public object? Schedule
+    {
+        get;
+        set;
+    }
+}
+""";
+            CreateCompilation(source).VerifyDiagnostics();
+
+            source = """
+#nullable enable
+using System.Linq;
+
+static object? GetTask()
+{
+    return new object();
+}
+
+static void DoSomething()
+{
+    var plans = Enumerable.Empty<Plan>();
+
+    var filtered = plans.Select(
+            plan => new { Value = plan.Schedule }
+        );
+
+    var tasks = filtered.Select(anon => GetTask());
+}
+
+DoSomething();
+
+class Plan
+{
+    public object? Schedule
+    {
+        get;
+        set;
+    }
+}
+""";
+            CreateCompilation(source).VerifyDiagnostics();
+        }
+
+        [Fact, WorkItem(61964, "https://github.com/dotnet/roslyn/issues/61964")]
+        public void NestedMethodAnalysis_Repro61964()
+        {
+            var source = """
+using System.Collections.Generic;
+using System.Linq;
+
+#nullable disable
+public class Widget { public string Name; }
+
+#nullable enable
+record Goo(Bar? Bar);
+record Bar(Baz? Baz);
+record Baz();
+
+class UsesNullObliviousType
+{
+    public static void DoWork(List<Goo> list, Widget widget)
+    {
+        var baz = list.Select(x => x.Bar.Baz); // 1
+
+        for (int i = 0; i < 10; i++)
+        {
+            var x = widget.Name;
+        }
+    }
+}
+
+class UsesNullObliviousTypeAndDoesNullCheck
+{
+    public static void DoWork(List<Goo> list, Widget widget)
+    {
+        var baz = list.Select(x => x.Bar.Baz); // 2
+
+        for (int i = 0; i < 10; i++)
+        {
+            if (widget.Name is null)
+            {
+            }
+        }
+    }
+}
+
+class UsesNonNullableType
+{
+    public static void DoWork(List<Goo> list, string unrelatedObject)
+    {
+        var baz = list.Select(x => x.Bar.Baz); // 3
+
+        for (int i = 0; i < 10; i++)
+        {
+            var x = unrelatedObject;
+        }
+    }
+}
+
+class UsesNonNullableTypeAndDoesNullCheck
+{
+    public static void DoWork(List<Goo> list, string unrelatedObject)
+    {
+        var baz = list.Select(x => x.Bar.Baz); // 4
+
+        for (int i = 0; i < 10; i++)
+        {
+            if (unrelatedObject is null)
+            {
+            }
+        }
+    }
+}
+""";
+            CreateCompilation(source, targetFramework: TargetFramework.Net70).VerifyDiagnostics(
+                // (16,36): warning CS8602: Dereference of a possibly null reference.
+                //         var baz = list.Select(x => x.Bar.Baz); // 1
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x.Bar").WithLocation(16, 36),
+                // (29,36): warning CS8602: Dereference of a possibly null reference.
+                //         var baz = list.Select(x => x.Bar.Baz); // 2
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x.Bar").WithLocation(29, 36),
+                // (44,36): warning CS8602: Dereference of a possibly null reference.
+                //         var baz = list.Select(x => x.Bar.Baz); // 3
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x.Bar").WithLocation(44, 36),
+                // (57,36): warning CS8602: Dereference of a possibly null reference.
+                //         var baz = list.Select(x => x.Bar.Baz); // 4
+                Diagnostic(ErrorCode.WRN_NullReferenceReceiver, "x.Bar").WithLocation(57, 36)
+                );
+        }
+
+        [Fact, WorkItem(65050, "https://github.com/dotnet/roslyn/issues/65050")]
+        public void UnreachableWhenClause_SwitchExpression()
+        {
+            var source = """
+                #nullable enable
+                class C
+                {
+                    string? M(bool b, string? s)
+                    {
+                        return b switch
+                        {
+                            _ when s?.Length == 0 => s,
+                            _ => null,
+                            true when s.Length > 0 => s,
+                        };
+                    }
+                }
+                """;
+            var comp = CreateCompilation(source).VerifyDiagnostics(
+                // (10,13): error CS8510: The pattern is unreachable. It has already been handled by a previous arm of the switch expression or it is impossible to match.
+                //             true when s.Length > 0 => s,
+                Diagnostic(ErrorCode.ERR_SwitchArmSubsumed, "true").WithLocation(10, 13));
+
+            var syntaxTree = comp.SyntaxTrees.Single();
+            var model = comp.GetSemanticModel(syntaxTree);
+
+            var arms = syntaxTree.GetRoot().DescendantNodes().OfType<SwitchExpressionArmSyntax>().ToImmutableArray();
+            Assert.Equal(3, arms.Length);
+            var unreachableArm = arms[^1];
+
+            var identifiers = unreachableArm.DescendantNodes().OfType<IdentifierNameSyntax>().ToImmutableArray();
+            Assert.Equal(3, identifiers.Length);
+            Assert.Equal("s", identifiers[0].ToString());
+            Assert.Equal("Length", identifiers[1].ToString());
+            Assert.Equal("s", identifiers[2].ToString());
+            Assert.All(identifiers, identifier =>
+            {
+                var typeInfo = model.GetTypeInfo(identifier);
+                Assert.Equal(CodeAnalysis.NullableFlowState.NotNull, typeInfo.Nullability.FlowState);
+                Assert.Equal(CodeAnalysis.NullableAnnotation.NotAnnotated, typeInfo.Nullability.Annotation);
+            });
+        }
+
+        [Fact, WorkItem(65050, "https://github.com/dotnet/roslyn/issues/65050")]
+        public void UnreachableWhenClause_SwitchStatement()
+        {
+            var source = """
+                #nullable enable
+                class C
+                {
+                    string? M(bool b, string? s)
+                    {
+                        switch (b)
+                        {
+                            case var x when s?.Length == 0:
+                                return s;
+                            case var x:
+                                return null;
+                            case true when s.Length > 0:
+                                return s;
+                        }
+                    }
+                }
+                """;
+            var comp = CreateCompilation(source).VerifyDiagnostics(
+                // (12,18): error CS8120: The switch case is unreachable. It has already been handled by a previous case or it is impossible to match.
+                //             case true when s.Length > 0:
+                Diagnostic(ErrorCode.ERR_SwitchCaseSubsumed, "true").WithLocation(12, 18));
+
+            var syntaxTree = comp.SyntaxTrees.Single();
+            var model = comp.GetSemanticModel(syntaxTree);
+
+            var sections = syntaxTree.GetRoot().DescendantNodes().OfType<SwitchSectionSyntax>().ToImmutableArray();
+            Assert.Equal(3, sections.Length);
+            var unreachableSection = sections[^1];
+
+            var identifiers = unreachableSection.DescendantNodes().OfType<IdentifierNameSyntax>().ToImmutableArray();
+            Assert.Equal(3, identifiers.Length);
+            Assert.Equal("s", identifiers[0].ToString());
+            Assert.Equal("Length", identifiers[1].ToString());
+            Assert.Equal("s", identifiers[2].ToString());
+            Assert.All(identifiers, identifier =>
+            {
+                var typeInfo = model.GetTypeInfo(identifier);
+                Assert.Equal(CodeAnalysis.NullableFlowState.NotNull, typeInfo.Nullability.FlowState);
+                Assert.Equal(CodeAnalysis.NullableAnnotation.NotAnnotated, typeInfo.Nullability.Annotation);
+            });
         }
     }
 }

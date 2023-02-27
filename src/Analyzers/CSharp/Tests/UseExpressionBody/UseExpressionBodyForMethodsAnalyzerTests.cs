@@ -19,6 +19,7 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.UseExpressionBody
         UseExpressionBodyDiagnosticAnalyzer,
         UseExpressionBodyCodeFixProvider>;
 
+    [Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
     public class UseExpressionBodyForMethodsAnalyzerTests
     {
         private static async Task TestWithUseExpressionBody(string code, string fixedCode, LanguageVersion version = LanguageVersion.CSharp8)
@@ -43,49 +44,7 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.UseExpressionBody
             }.RunAsync();
         }
 
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
-        public void TestOptionSerialization1()
-        {
-            // Verify that bool-options can migrate to ExpressionBodyPreference-options.
-            var option = new CodeStyleOption2<bool>(false, NotificationOption2.Silent);
-            var serialized = option.ToXElement();
-            var deserialized = CodeStyleOption2<ExpressionBodyPreference>.FromXElement(serialized);
-
-            Assert.Equal(ExpressionBodyPreference.Never, deserialized.Value);
-
-            option = new CodeStyleOption2<bool>(true, NotificationOption2.Silent);
-            serialized = option.ToXElement();
-            deserialized = CodeStyleOption2<ExpressionBodyPreference>.FromXElement(serialized);
-
-            Assert.Equal(ExpressionBodyPreference.WhenPossible, deserialized.Value);
-        }
-
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
-        public void TestOptionSerialization2()
-        {
-            // Verify that ExpressionBodyPreference-options can migrate to bool-options.
-            var option = new CodeStyleOption2<ExpressionBodyPreference>(ExpressionBodyPreference.Never, NotificationOption2.Silent);
-            var serialized = option.ToXElement();
-            var deserialized = CodeStyleOption2<bool>.FromXElement(serialized);
-
-            Assert.False(deserialized.Value);
-
-            option = new CodeStyleOption2<ExpressionBodyPreference>(ExpressionBodyPreference.WhenPossible, NotificationOption2.Silent);
-            serialized = option.ToXElement();
-            deserialized = CodeStyleOption2<bool>.FromXElement(serialized);
-
-            Assert.True(deserialized.Value);
-
-            // This new values can't actually translate back to a bool.  So we'll just get the default
-            // value for this option.
-            option = new CodeStyleOption2<ExpressionBodyPreference>(ExpressionBodyPreference.WhenOnSingleLine, NotificationOption2.Silent);
-            serialized = option.ToXElement();
-            deserialized = CodeStyleOption2<bool>.FromXElement(serialized);
-
-            Assert.Equal(default, deserialized.Value);
-        }
-
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
+        [Fact]
         public void TestOptionEditorConfig1()
         {
             var option = CSharpCodeStyleOptions.ParseExpressionBodyPreference("true", CSharpCodeStyleOptions.NeverWithSilentEnforcement);
@@ -121,7 +80,7 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.UseExpressionBody
             Assert.Equal(NotificationOption2.Suggestion, option.Notification);
         }
 
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
+        [Fact]
         public async Task TestUseExpressionBody1()
         {
             var code = @"
@@ -144,7 +103,7 @@ class C
             await TestWithUseExpressionBody(code, fixedCode);
         }
 
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
+        [Fact]
         public async Task TestUseExpressionBody2()
         {
             var code = @"
@@ -167,7 +126,7 @@ class C
             await TestWithUseExpressionBody(code, fixedCode);
         }
 
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
+        [Fact]
         public async Task TestUseExpressionBody3()
         {
             var code = @"
@@ -190,7 +149,7 @@ class C
             await TestWithUseExpressionBody(code, fixedCode);
         }
 
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
+        [Fact]
         public async Task TestUseExpressionBody4()
         {
             var code = @"
@@ -213,7 +172,7 @@ class C
             await TestWithUseExpressionBody(code, fixedCode);
         }
 
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
+        [Fact]
         public async Task TestUseBlockBody1()
         {
             var code = @"
@@ -236,7 +195,7 @@ class C
             await TestWithUseBlockBody(code, fixedCode);
         }
 
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
+        [Fact]
         public async Task TestUseBlockBody2()
         {
             var code = @"
@@ -259,7 +218,7 @@ class C
             await TestWithUseBlockBody(code, fixedCode);
         }
 
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
+        [Fact]
         public async Task TestUseBlockBody3()
         {
             var code = @"
@@ -282,7 +241,7 @@ class C
             await TestWithUseBlockBody(code, fixedCode);
         }
 
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
+        [Fact]
         public async Task TestUseBlockBody4()
         {
             var code = @"
@@ -305,7 +264,7 @@ class C
             await TestWithUseBlockBody(code, fixedCode);
         }
 
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
+        [Fact]
         public async Task TestComments1()
         {
             var code = @"
@@ -331,7 +290,7 @@ class C
             await TestWithUseExpressionBody(code, fixedCode);
         }
 
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
+        [Fact]
         public async Task TestComments2()
         {
             var code = @"
@@ -357,7 +316,7 @@ class C
             await TestWithUseExpressionBody(code, fixedCode);
         }
 
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
+        [Fact]
         public async Task TestComments3()
         {
             var code = @"
@@ -387,7 +346,7 @@ class C
             await TestWithUseExpressionBody(code, fixedCode);
         }
 
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
+        [Fact]
         public async Task TestComments4()
         {
             var code = @"
@@ -410,7 +369,7 @@ class C
             await TestWithUseExpressionBody(code, fixedCode);
         }
 
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
+        [Fact]
         public async Task TestComments5()
         {
             var code = @"
@@ -433,7 +392,7 @@ class C
             await TestWithUseExpressionBody(code, fixedCode);
         }
 
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
+        [Fact]
         public async Task TestComments6()
         {
             var code = @"
@@ -460,8 +419,7 @@ class C
             await TestWithUseExpressionBody(code, fixedCode);
         }
 
-        [WorkItem(17120, "https://github.com/dotnet/roslyn/issues/17120")]
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
+        [Fact, WorkItem(17120, "https://github.com/dotnet/roslyn/issues/17120")]
         public async Task TestDirectives1()
         {
             var code = @"
@@ -492,8 +450,7 @@ class Program
             await TestWithUseExpressionBody(code, fixedCode);
         }
 
-        [WorkItem(17120, "https://github.com/dotnet/roslyn/issues/17120")]
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
+        [Fact, WorkItem(17120, "https://github.com/dotnet/roslyn/issues/17120")]
         public async Task TestDirectives2()
         {
             var code = @"
@@ -528,15 +485,14 @@ class Program
             await TestWithUseExpressionBody(code, fixedCode);
         }
 
-        [WorkItem(20362, "https://github.com/dotnet/roslyn/issues/20362")]
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
+        [Fact, WorkItem(20362, "https://github.com/dotnet/roslyn/issues/20362")]
         public async Task TestOfferToConvertToBlockEvenIfExpressionBodyPreferredIfPriorToCSharp6()
         {
             var code = @"
 using System;
 class C
 {
-    {|IDE0022:void M() {|CS8026:=> {|CS8026:throw new NotImplementedException()|}|};|}
+    {|IDE0022:void M() {|CS8026:=>|} {|CS8026:throw|} new NotImplementedException();|}
 }";
             var fixedCode = @"
 using System;
@@ -550,8 +506,7 @@ class C
             await TestWithUseExpressionBody(code, fixedCode, LanguageVersion.CSharp5);
         }
 
-        [WorkItem(20352, "https://github.com/dotnet/roslyn/issues/20352")]
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
+        [Fact, WorkItem(20352, "https://github.com/dotnet/roslyn/issues/20352")]
         public async Task TestDoNotOfferToConvertToBlockIfExpressionBodyPreferredIfCSharp6()
         {
             var code = @"
@@ -563,8 +518,7 @@ class C
             await TestWithUseExpressionBody(code, code, LanguageVersion.CSharp6);
         }
 
-        [WorkItem(20352, "https://github.com/dotnet/roslyn/issues/20352")]
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
+        [Fact, WorkItem(20352, "https://github.com/dotnet/roslyn/issues/20352")]
         public async Task TestOfferToConvertToExpressionIfCSharp6()
         {
             var code = @"
@@ -582,8 +536,7 @@ class C
             await TestWithUseExpressionBody(code, fixedCode, LanguageVersion.CSharp6);
         }
 
-        [WorkItem(20352, "https://github.com/dotnet/roslyn/issues/20352")]
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
+        [Fact, WorkItem(20352, "https://github.com/dotnet/roslyn/issues/20352")]
         public async Task TestDoNotOfferToConvertToExpressionInCSharp6IfThrowExpression()
         {
             var code = @"
@@ -596,16 +549,15 @@ class C
             await TestWithUseExpressionBody(code, code, LanguageVersion.CSharp6);
         }
 
-        [WorkItem(20362, "https://github.com/dotnet/roslyn/issues/20362")]
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
+        [Fact, WorkItem(20362, "https://github.com/dotnet/roslyn/issues/20362")]
         public async Task TestOfferToConvertToBlockEvenIfExpressionBodyPreferredIfPriorToCSharp6_FixAll()
         {
             var code = @"
 using System;
 class C
 {
-    {|IDE0022:void M() => {|CS8059:throw new NotImplementedException()|};|}
-    {|IDE0022:void M(int i) => {|CS8059:throw new NotImplementedException()|};|}
+    {|IDE0022:void M() => {|CS8059:throw|} new NotImplementedException();|}
+    {|IDE0022:void M(int i) => {|CS8059:throw|} new NotImplementedException();|}
     int M(bool b) => 0;
 }";
             var fixedCode = @"
@@ -627,8 +579,7 @@ class C
             await TestWithUseExpressionBody(code, fixedCode, LanguageVersion.CSharp6);
         }
 
-        [WorkItem(25202, "https://github.com/dotnet/roslyn/issues/25202")]
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
+        [Fact, WorkItem(25202, "https://github.com/dotnet/roslyn/issues/25202")]
         public async Task TestUseBlockBodyAsync1()
         {
             var code = @"
@@ -655,8 +606,7 @@ class C
             await TestWithUseBlockBody(code, fixedCode);
         }
 
-        [WorkItem(25202, "https://github.com/dotnet/roslyn/issues/25202")]
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
+        [Fact, WorkItem(25202, "https://github.com/dotnet/roslyn/issues/25202")]
         public async Task TestUseBlockBodyAsync2()
         {
             var code = @"
@@ -683,8 +633,7 @@ class C
             await TestWithUseBlockBody(code, fixedCode);
         }
 
-        [WorkItem(25202, "https://github.com/dotnet/roslyn/issues/25202")]
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
+        [Fact, WorkItem(25202, "https://github.com/dotnet/roslyn/issues/25202")]
         public async Task TestUseBlockBodyAsync3()
         {
             var code = @"
@@ -711,8 +660,7 @@ class C
             await TestWithUseBlockBody(code, fixedCode);
         }
 
-        [WorkItem(25202, "https://github.com/dotnet/roslyn/issues/25202")]
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
+        [Fact, WorkItem(25202, "https://github.com/dotnet/roslyn/issues/25202")]
         public async Task TestUseBlockBodyAsync4()
         {
             var code = @"
@@ -739,8 +687,7 @@ class C
             await TestWithUseBlockBody(code, fixedCode, ReferenceAssemblies.NetStandard.NetStandard21);
         }
 
-        [WorkItem(25202, "https://github.com/dotnet/roslyn/issues/25202")]
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
+        [Fact, WorkItem(25202, "https://github.com/dotnet/roslyn/issues/25202")]
         public async Task TestUseBlockBodyAsync5()
         {
             var code = @"
@@ -767,8 +714,7 @@ class C
             await TestWithUseBlockBody(code, fixedCode);
         }
 
-        [WorkItem(25202, "https://github.com/dotnet/roslyn/issues/25202")]
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
+        [Fact, WorkItem(25202, "https://github.com/dotnet/roslyn/issues/25202")]
         public async Task TestUseBlockBodyAsync6()
         {
             var code = @"
@@ -795,8 +741,7 @@ class C
             await TestWithUseBlockBody(code, fixedCode);
         }
 
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseExpressionBody)]
-        [WorkItem(53532, "https://github.com/dotnet/roslyn/issues/53532")]
+        [Fact, WorkItem(53532, "https://github.com/dotnet/roslyn/issues/53532")]
         public async Task TestUseBlockBodyTrivia1()
         {
             var code = @"
