@@ -16,6 +16,7 @@ using Microsoft.CodeAnalysis.Test.Utilities;
 using Microsoft.VisualStudio.Debugger.Evaluation;
 using Roslyn.Test.Utilities;
 using Xunit;
+using Basic.Reference.Assemblies;
 
 namespace Microsoft.CodeAnalysis.CSharp.ExpressionEvaluator.UnitTests
 {
@@ -476,7 +477,7 @@ namespace Microsoft.CodeAnalysis.CSharp.ExpressionEvaluator.UnitTests
                 });
         }
 
-        [Fact, WorkItem(482753, "https://devdiv.visualstudio.com/DevDiv/_workitems?id=482753")]
+        [Fact, WorkItem("https://devdiv.visualstudio.com/DevDiv/_workitems?id=482753")]
         public void LocalsInAsync()
         {
             var source =
@@ -506,7 +507,7 @@ class C
             // Test with CompileExpression rather than CompileExpressions
             // so field references in IL are named.
             // Debug build.
-            var comp = CreateCompilationWithMscorlib45(source, options: TestOptions.DebugDll, references: new[] { TestMetadata.Net40.SystemCore });
+            var comp = CreateCompilationWithMscorlib461(source, options: TestOptions.DebugDll, references: new[] { Net40.References.SystemCore });
             WithRuntimeInstance(
                 comp,
                 references: null,
@@ -541,7 +542,7 @@ class C
 }");
                 });
             // Release build.
-            comp = CreateCompilationWithMscorlib45(source, options: TestOptions.ReleaseDll, references: new[] { SystemCoreRef });
+            comp = CreateCompilationWithMscorlib461(source, options: TestOptions.ReleaseDll, references: new[] { SystemCoreRef });
             {
                 // Note from MoveNext() below that local CS$<>8__locals0 should not be
                 // used in the compiled expression to access the display class since that
@@ -1027,9 +1028,8 @@ class Program
                 });
         }
 
-        [WorkItem(66109, "https://github.com/dotnet/roslyn/issues/66109")]
-        [WorkItem(64098, "https://github.com/dotnet/roslyn/issues/64098")]
-        [Fact]
+        [WorkItem("https://github.com/dotnet/roslyn/issues/66109")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/64098")]
         public void FileLocalType_07()
         {
             var sourceA = """
@@ -1178,8 +1178,7 @@ class Program
                 });
         }
 
-        [WorkItem(66109, "https://github.com/dotnet/roslyn/issues/66109")]
-        [Fact]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/66109")]
         public void SequencePointsMultipleDocuments_01()
         {
             var sourceA =
@@ -1356,8 +1355,7 @@ class Program
                 });
         }
 
-        [WorkItem(66109, "https://github.com/dotnet/roslyn/issues/66109")]
-        [Fact]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/66109")]
         public void SequencePointsMultipleDocuments_02()
         {
             var sourceA = """

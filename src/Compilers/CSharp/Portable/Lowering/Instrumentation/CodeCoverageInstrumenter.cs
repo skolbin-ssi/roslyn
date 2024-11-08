@@ -234,9 +234,9 @@ namespace Microsoft.CodeAnalysis.CSharp
                     methodBodyFactory.Literal(dynamicAnalysisSpans.Length)));
         }
 
-        public override void InstrumentBlock(BoundBlock original, LocalRewriter rewriter, ref TemporaryArray<LocalSymbol> additionalLocals, out BoundStatement? prologue, out BoundStatement? epilogue)
+        public override void InstrumentBlock(BoundBlock original, LocalRewriter rewriter, ref TemporaryArray<LocalSymbol> additionalLocals, out BoundStatement? prologue, out BoundStatement? epilogue, out BoundBlockInstrumentation? instrumentation)
         {
-            base.InstrumentBlock(original, rewriter, ref additionalLocals, out var previousPrologue, out epilogue);
+            base.InstrumentBlock(original, rewriter, ref additionalLocals, out var previousPrologue, out epilogue, out instrumentation);
 
             // only instrument method body block:
             if (original != rewriter.CurrentMethodBody)
@@ -371,9 +371,9 @@ namespace Microsoft.CodeAnalysis.CSharp
             return AddDynamicAnalysis(original, base.InstrumentForEachStatementDeconstructionVariablesDeclaration(original, iterationVarDecl));
         }
 
-        public override BoundStatement InstrumentIfStatement(BoundIfStatement original, BoundStatement rewritten)
+        public override BoundStatement InstrumentIfStatementConditionalGoto(BoundIfStatement original, BoundStatement rewritten)
         {
-            return AddDynamicAnalysis(original, base.InstrumentIfStatement(original, rewritten));
+            return AddDynamicAnalysis(original, base.InstrumentIfStatementConditionalGoto(original, rewritten));
         }
 
         public override BoundStatement InstrumentWhileStatementConditionalGotoStartOrBreak(BoundWhileStatement original, BoundStatement ifConditionGotoStart)
@@ -381,9 +381,9 @@ namespace Microsoft.CodeAnalysis.CSharp
             return AddDynamicAnalysis(original, base.InstrumentWhileStatementConditionalGotoStartOrBreak(original, ifConditionGotoStart));
         }
 
-        public override BoundStatement InstrumentLocalInitialization(BoundLocalDeclaration original, BoundStatement rewritten)
+        public override BoundStatement InstrumentUserDefinedLocalInitialization(BoundLocalDeclaration original, BoundStatement rewritten)
         {
-            return AddDynamicAnalysis(original, base.InstrumentLocalInitialization(original, rewritten));
+            return AddDynamicAnalysis(original, base.InstrumentUserDefinedLocalInitialization(original, rewritten));
         }
 
         public override BoundStatement InstrumentLockTargetCapture(BoundLockStatement original, BoundStatement lockTargetCapture)

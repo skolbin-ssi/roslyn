@@ -9,7 +9,7 @@ Imports Microsoft.CodeAnalysis.VisualBasic.DocumentationComments
 
 Namespace Microsoft.CodeAnalysis.Editor.VisualBasic.UnitTests.DocumentationComments
     Public Class RemoveDocCommentNodeCodeFixProviderTests
-        Inherits AbstractVisualBasicDiagnosticProviderBasedUserDiagnosticTest
+        Inherits AbstractVisualBasicDiagnosticProviderBasedUserDiagnosticTest_NoEditor
 
         Friend Overrides Function CreateDiagnosticProviderAndFixer(workspace As Workspace) As (DiagnosticAnalyzer, CodeFixProvider)
             Return (Nothing, New VisualBasicRemoveDocCommentNodeCodeFixProvider())
@@ -140,7 +140,7 @@ End Class"
         End Function
 
         <Fact, Trait(Traits.Feature, Traits.Features.CodeActionsRemoveDocCommentNode)>
-        <WorkItem(13436, "https://github.com/dotnet/roslyn/issues/13436")>
+        <WorkItem("https://github.com/dotnet/roslyn/issues/13436")>
         Public Async Function RemovesParamTag_BothParamTagsOnSameLine() As Task
             Dim initial =
 "Class Program
@@ -166,7 +166,7 @@ End Class"
         End Function
 
         <Fact, Trait(Traits.Feature, Traits.Features.CodeActionsRemoveDocCommentNode)>
-        <WorkItem(13436, "https://github.com/dotnet/roslyn/issues/13436")>
+        <WorkItem("https://github.com/dotnet/roslyn/issues/13436")>
         Public Async Function RemovesParamTag_TrailingText1() As Task
             Dim initial =
 "Class Program

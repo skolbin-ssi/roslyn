@@ -11,241 +11,280 @@ using Microsoft.CodeAnalysis.Test.Utilities;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.UseExplicitTypeForConst
-{
-    [Trait(Traits.Feature, Traits.Features.CodeActionsUseExplicitTypeForConst)]
-    public sealed class UseExplicitTypeForConstTests : AbstractCSharpDiagnosticProviderBasedUserDiagnosticTest
-    {
-        public UseExplicitTypeForConstTests(ITestOutputHelper logger)
-            : base(logger)
-        {
-        }
+namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.UseExplicitTypeForConst;
 
-        internal override (DiagnosticAnalyzer?, CodeFixProvider) CreateDiagnosticProviderAndFixer(Workspace workspace)
-            => (null, new UseExplicitTypeForConstCodeFixProvider());
+[Trait(Traits.Feature, Traits.Features.CodeActionsUseExplicitTypeForConst)]
+public sealed class UseExplicitTypeForConstTests : AbstractCSharpDiagnosticProviderBasedUserDiagnosticTest_NoEditor
+{
+    public UseExplicitTypeForConstTests(ITestOutputHelper logger)
+        : base(logger)
+    {
+    }
 
-        [Fact]
-        public async Task TestWithIntLiteral()
-        {
-            await TestInRegularAndScriptAsync(
-@"class C
-{
-    void M()
-    {
-        const [|var|] v = 0;
-    }
-}",
-@"class C
-{
-    void M()
-    {
-        const int v = 0;
-    }
-}");
-        }
+    internal override (DiagnosticAnalyzer?, CodeFixProvider) CreateDiagnosticProviderAndFixer(Workspace workspace)
+        => (null, new UseExplicitTypeForConstCodeFixProvider());
 
-        [Fact]
-        public async Task TestWithStringConstant()
-        {
-            await TestInRegularAndScriptAsync(
-@"class C
-{
-    const string s = null;
-    void M()
+    [Fact]
+    public async Task TestWithIntLiteral()
     {
-        const [|var|] v = s;
+        await TestInRegularAndScriptAsync(
+            """
+            class C
+            {
+                void M()
+                {
+                    const [|var|] v = 0;
+                }
+            }
+            """,
+            """
+            class C
+            {
+                void M()
+                {
+                    const int v = 0;
+                }
+            }
+            """);
     }
-}",
-@"class C
-{
-    const string s = null;
-    void M()
-    {
-        const string v = s;
-    }
-}");
-        }
 
-        [Fact]
-        public async Task TestWithQualifiedType()
-        {
-            await TestInRegularAndScriptAsync(
-@"class C
-{
-    void M()
+    [Fact]
+    public async Task TestWithStringConstant()
     {
-        const [|var|] v = default(System.Action);
+        await TestInRegularAndScriptAsync(
+            """
+            class C
+            {
+                const string s = null;
+                void M()
+                {
+                    const [|var|] v = s;
+                }
+            }
+            """,
+            """
+            class C
+            {
+                const string s = null;
+                void M()
+                {
+                    const string v = s;
+                }
+            }
+            """);
     }
-}",
-@"class C
-{
-    void M()
-    {
-        const System.Action v = default(System.Action);
-    }
-}");
-        }
 
-        [Fact]
-        public async Task TestWithNonConstantInitializer()
-        {
-            await TestInRegularAndScriptAsync(
-@"class C
-{
-    void M()
+    [Fact]
+    public async Task TestWithQualifiedType()
     {
-        const [|var|] v = System.Console.ReadLine();
+        await TestInRegularAndScriptAsync(
+            """
+            class C
+            {
+                void M()
+                {
+                    const [|var|] v = default(System.Action);
+                }
+            }
+            """,
+            """
+            class C
+            {
+                void M()
+                {
+                    const System.Action v = default(System.Action);
+                }
+            }
+            """);
     }
-}",
-@"class C
-{
-    void M()
-    {
-        const string v = System.Console.ReadLine();
-    }
-}");
-        }
 
-        [Fact]
-        public async Task TestWithNonConstantTupleType()
-        {
-            await TestInRegularAndScriptAsync(
-@"class C
-{
-    void M()
+    [Fact]
+    public async Task TestWithNonConstantInitializer()
     {
-        const [|var|] v = (0, true);
+        await TestInRegularAndScriptAsync(
+            """
+            class C
+            {
+                void M()
+                {
+                    const [|var|] v = System.Console.ReadLine();
+                }
+            }
+            """,
+            """
+            class C
+            {
+                void M()
+                {
+                    const string v = System.Console.ReadLine();
+                }
+            }
+            """);
     }
-}",
-@"class C
-{
-    void M()
-    {
-        const (int, bool) v = (0, true);
-    }
-}");
-        }
 
-        [Fact]
-        public async Task TestNotWithNullLiteral()
-        {
-            await TestMissingInRegularAndScriptAsync(
-@"class C
-{
-    void M()
+    [Fact]
+    public async Task TestWithNonConstantTupleType()
     {
-        const [|var|] v = null;
+        await TestInRegularAndScriptAsync(
+            """
+            class C
+            {
+                void M()
+                {
+                    const [|var|] v = (0, true);
+                }
+            }
+            """,
+            """
+            class C
+            {
+                void M()
+                {
+                    const (int, bool) v = (0, true);
+                }
+            }
+            """);
     }
-}");
-        }
 
-        [Fact]
-        public async Task TestNotWithDefaultLiteral()
-        {
-            await TestMissingInRegularAndScriptAsync(
-@"class C
-{
-    void M()
+    [Fact]
+    public async Task TestNotWithNullLiteral()
     {
-        const [|var|] v = default;
+        await TestMissingInRegularAndScriptAsync(
+            """
+            class C
+            {
+                void M()
+                {
+                    const [|var|] v = null;
+                }
+            }
+            """);
     }
-}");
-        }
 
-        [Fact]
-        public async Task TestWithLambda()
-        {
-            await TestInRegularAndScriptAsync(
-@"class C
-{
-    void M()
+    [Fact]
+    public async Task TestNotWithDefaultLiteral()
     {
-        const [|var|] v = () => { };
+        await TestMissingInRegularAndScriptAsync(
+            """
+            class C
+            {
+                void M()
+                {
+                    const [|var|] v = default;
+                }
+            }
+            """);
     }
-}",
-@"class C
-{
-    void M()
-    {
-        const System.Action v = () => { };
-    }
-}");
-        }
 
-        [Fact]
-        public async Task TestNotWithAnonymousType()
-        {
-            await TestMissingInRegularAndScriptAsync(
-@"class C
-{
-    void M()
+    [Fact]
+    public async Task TestWithLambda()
     {
-        const [|var|] v = new { a = 0 };
+        await TestInRegularAndScriptAsync(
+            """
+            class C
+            {
+                void M()
+                {
+                    const [|var|] v = () => { };
+                }
+            }
+            """,
+            """
+            class C
+            {
+                void M()
+                {
+                    const System.Action v = () => { };
+                }
+            }
+            """);
     }
-}");
-        }
 
-        [Fact]
-        public async Task TestNotWithArrayInitializer()
-        {
-            await TestMissingInRegularAndScriptAsync(
-@"class C
-{
-    void M()
+    [Fact]
+    public async Task TestNotWithAnonymousType()
     {
-        const [|var|] v = { 0, 1 };
+        await TestMissingInRegularAndScriptAsync(
+            """
+            class C
+            {
+                void M()
+                {
+                    const [|var|] v = new { a = 0 };
+                }
+            }
+            """);
     }
-}");
-        }
 
-        [Fact]
-        public async Task TestNotWithMissingInitializer()
-        {
-            await TestMissingInRegularAndScriptAsync(
-@"class C
-{
-    void M()
+    [Fact]
+    public async Task TestNotWithArrayInitializer()
     {
-        const [|var|] v =
+        await TestMissingInRegularAndScriptAsync(
+            """
+            class C
+            {
+                void M()
+                {
+                    const [|var|] v = { 0, 1 };
+                }
+            }
+            """);
     }
-}");
-        }
 
-        [Fact]
-        public async Task TestNotWithClassVar()
-        {
-            await TestMissingInRegularAndScriptAsync(
-@"class C
-{
-    class var { }
-    void M()
+    [Fact]
+    public async Task TestNotWithMissingInitializer()
     {
-        const [|var|] v = 0;
+        await TestMissingInRegularAndScriptAsync(
+            """
+            class C
+            {
+                void M()
+                {
+                    const [|var|] v =
+                }
+            }
+            """);
     }
-}");
-        }
 
-        [Fact]
-        public async Task TestNotOnField()
-        {
-            await TestMissingInRegularAndScriptAsync(
-@"class C
-{
-    const [|var|] v = 0;
-}");
-        }
-
-        [Fact]
-        public async Task TestNotWithMultipleDeclarators()
-        {
-            await TestMissingInRegularAndScriptAsync(
-@"class C
-{
-    void M()
+    [Fact]
+    public async Task TestNotWithClassVar()
     {
-        const [|var|] a = 0, b = 0;
+        await TestMissingInRegularAndScriptAsync(
+            """
+            class C
+            {
+                class var { }
+                void M()
+                {
+                    const [|var|] v = 0;
+                }
+            }
+            """);
     }
-}");
-        }
+
+    [Fact]
+    public async Task TestNotOnField()
+    {
+        await TestMissingInRegularAndScriptAsync(
+            """
+            class C
+            {
+                const [|var|] v = 0;
+            }
+            """);
+    }
+
+    [Fact]
+    public async Task TestNotWithMultipleDeclarators()
+    {
+        await TestMissingInRegularAndScriptAsync(
+            """
+            class C
+            {
+                void M()
+                {
+                    const [|var|] a = 0, b = 0;
+                }
+            }
+            """);
     }
 }

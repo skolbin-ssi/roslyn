@@ -665,6 +665,79 @@ oneMoreTime:
 
         private void EmitBlock(BoundBlock block)
         {
+            if (block.Instrumentation is not null)
+            {
+                EmitInstrumentedBlock(block.Instrumentation, block);
+            }
+            else
+            {
+                EmitUninstrumentedBlock(block);
+            }
+        }
+
+        private void EmitInstrumentedBlock(BoundBlockInstrumentation instrumentation, BoundBlock block)
+        {
+            if (!instrumentation.Locals.IsEmpty)
+            {
+                _builder.OpenLocalScope();
+
+                foreach (var local in instrumentation.Locals)
+                {
+                    DefineLocal(local, block.Syntax);
+                }
+            }
+
+            if (instrumentation.Prologue != null)
+            {
+                if (_emitPdbSequencePoints)
+                {
+                    EmitHiddenSequencePoint();
+                }
+
+                EmitStatement(instrumentation.Prologue);
+            }
+
+            _builder.AssertStackEmpty();
+
+            if (instrumentation.Epilogue != null)
+            {
+                _builder.OpenLocalScope(ScopeType.TryCatchFinally);
+
+                _builder.OpenLocalScope(ScopeType.Try);
+
+                EmitUninstrumentedBlock(block);
+                _builder.CloseLocalScope(); // try
+
+                _builder.OpenLocalScope(ScopeType.Finally);
+
+                if (_emitPdbSequencePoints)
+                {
+                    EmitHiddenSequencePoint();
+                }
+
+                EmitStatement(instrumentation.Epilogue);
+                _builder.CloseLocalScope(); // finally
+
+                _builder.CloseLocalScope(); // try-finally
+            }
+            else
+            {
+                EmitUninstrumentedBlock(block);
+            }
+
+            if (!instrumentation.Locals.IsEmpty)
+            {
+                foreach (var local in instrumentation.Locals)
+                {
+                    FreeLocal(local);
+                }
+
+                _builder.CloseLocalScope();
+            }
+        }
+
+        private void EmitUninstrumentedBlock(BoundBlock block)
+        {
             var hasLocals = !block.Locals.IsEmpty;
 
             if (hasLocals)
@@ -686,7 +759,15 @@ oneMoreTime:
             if (_indirectReturnState == IndirectReturnState.Needed &&
                 IsLastBlockInMethod(block))
             {
-                HandleReturn();
+                if (block.Instrumentation != null)
+                {
+                    // jump out of try-finally
+                    _builder.EmitBranch(ILOpCode.Br, s_returnLabel);
+                }
+                else
+                {
+                    HandleReturn();
+                }
             }
 
             if (hasLocals)
@@ -1409,11 +1490,9 @@ oneMoreTime:
             LocalDefinition keyHash = null;
 
             // Condition is necessary, but not sufficient (e.g. might be missing a special or well-known member).
-            if (SwitchStringJumpTableEmitter.ShouldGenerateHashTableSwitch(_module, switchCaseLabels.Length))
+            if (SwitchStringJumpTableEmitter.ShouldGenerateHashTableSwitch(switchCaseLabels.Length))
             {
-                Debug.Assert(_module.SupportsPrivateImplClass);
-
-                var privateImplClass = _module.GetPrivateImplClass(syntaxNode, _diagnostics.DiagnosticBag);
+                var privateImplClass = _module.GetPrivateImplClass(syntaxNode, _diagnostics.DiagnosticBag).PrivateImplementationDetails;
                 Cci.IReference stringHashMethodRef = privateImplClass.GetMethod(
                     isSpanOrReadOnlySpan
                         ? isReadOnlySpan
@@ -1689,7 +1768,7 @@ oneMoreTime:
                 MetadataConstant compileTimeValue = _module.CreateConstant(local.Type, local.ConstantValue, syntaxNode, _diagnostics.DiagnosticBag);
                 LocalConstantDefinition localConstantDef = new LocalConstantDefinition(
                     local.Name,
-                    local.Locations.FirstOrDefault() ?? Location.None,
+                    local.GetFirstLocationOrNone(),
                     compileTimeValue,
                     dynamicTransformFlags: dynamicTransformFlags,
                     tupleElementNames: tupleElementNames);

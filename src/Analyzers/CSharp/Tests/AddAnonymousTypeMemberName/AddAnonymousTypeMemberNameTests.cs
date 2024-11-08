@@ -11,127 +11,136 @@ using Microsoft.CodeAnalysis.Test.Utilities;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.AddAnonymousTypeMemberName
-{
-    [Trait(Traits.Feature, Traits.Features.CodeActionsAddAnonymousTypeMemberName)]
-    public class AddAnonymousTypeMemberNameTests : AbstractCSharpDiagnosticProviderBasedUserDiagnosticTest
-    {
-        public AddAnonymousTypeMemberNameTests(ITestOutputHelper logger)
-           : base(logger)
-        {
-        }
+namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.AddAnonymousTypeMemberName;
 
-        internal override (DiagnosticAnalyzer?, CodeFixProvider) CreateDiagnosticProviderAndFixer(Workspace workspace)
-            => (null, new CSharpAddAnonymousTypeMemberNameCodeFixProvider());
+[Trait(Traits.Feature, Traits.Features.CodeActionsAddAnonymousTypeMemberName)]
+public class AddAnonymousTypeMemberNameTests : AbstractCSharpDiagnosticProviderBasedUserDiagnosticTest_NoEditor
+{
+    public AddAnonymousTypeMemberNameTests(ITestOutputHelper logger)
+       : base(logger)
+    {
+    }
 
-        [Fact]
-        public async Task Test1()
-        {
-            await TestInRegularAndScript1Async(
-@"
-class C
-{
-    void M()
-    {
-        var v = new { [||]this.GetType() };
-    }
-}",
-@"
-class C
-{
-    void M()
-    {
-        var v = new { {|Rename:Type|} = this.GetType() };
-    }
-}");
-        }
+    internal override (DiagnosticAnalyzer?, CodeFixProvider) CreateDiagnosticProviderAndFixer(Workspace workspace)
+        => (null, new CSharpAddAnonymousTypeMemberNameCodeFixProvider());
 
-        [Fact]
-        public async Task TestExistingName()
-        {
-            await TestInRegularAndScript1Async(
-@"
-class C
-{
-    void M()
+    [Fact]
+    public async Task Test1()
     {
-        var v = new { Type = 1, [||]this.GetType() };
+        await TestInRegularAndScript1Async(
+            """
+            class C
+            {
+                void M()
+                {
+                    var v = new { [||]this.GetType() };
+                }
+            }
+            """,
+            """
+            class C
+            {
+                void M()
+                {
+                    var v = new { {|Rename:Type|} = this.GetType() };
+                }
+            }
+            """);
     }
-}",
-@"
-class C
-{
-    void M()
-    {
-        var v = new { Type = 1, {|Rename:Type1|} = this.GetType() };
-    }
-}");
-        }
 
-        [Fact]
-        public async Task TestFixAll1()
-        {
-            await TestInRegularAndScript1Async(
-@"
-class C
-{
-    void M()
+    [Fact]
+    public async Task TestExistingName()
     {
-        var v = new { {|FixAllInDocument:|}new { this.GetType(), this.ToString() } };
+        await TestInRegularAndScript1Async(
+            """
+            class C
+            {
+                void M()
+                {
+                    var v = new { Type = 1, [||]this.GetType() };
+                }
+            }
+            """,
+            """
+            class C
+            {
+                void M()
+                {
+                    var v = new { Type = 1, {|Rename:Type1|} = this.GetType() };
+                }
+            }
+            """);
     }
-}",
-@"
-class C
-{
-    void M()
-    {
-        var v = new { Value = new { Type = this.GetType(), V = this.ToString() } };
-    }
-}");
-        }
 
-        [Fact]
-        public async Task TestFixAll2()
+    [Fact]
+    public async Task TestFixAll1()
+    {
+        await TestInRegularAndScript1Async(
+        """
+        class C
         {
-            await TestInRegularAndScript1Async(
-@"
-class C
-{
-    void M()
-    {
-        var v = new { new { {|FixAllInDocument:|}this.GetType(), this.ToString() } };
-    }
-}",
-@"
-class C
-{
-    void M()
-    {
-        var v = new { Value = new { Type = this.GetType(), V = this.ToString() } };
-    }
-}");
+            void M()
+            {
+                var v = new { {|FixAllInDocument:|}new { this.GetType(), this.ToString() } };
+            }
         }
+        """,
+        """
+        class C
+        {
+            void M()
+            {
+                var v = new { Value = new { Type = this.GetType(), V = this.ToString() } };
+            }
+        }
+        """);
+    }
 
-        [Fact]
-        public async Task TestFixAll3()
+    [Fact]
+    public async Task TestFixAll2()
+    {
+        await TestInRegularAndScript1Async(
+        """
+        class C
         {
-            await TestInRegularAndScript1Async(
-@"
-class C
-{
-    void M()
-    {
-        var v = new { {|FixAllInDocument:|}new { this.GetType(), this.GetType() } };
-    }
-}",
-@"
-class C
-{
-    void M()
-    {
-        var v = new { Value = new { Type = this.GetType(), Type1 = this.GetType() } };
-    }
-}");
+            void M()
+            {
+                var v = new { new { {|FixAllInDocument:|}this.GetType(), this.ToString() } };
+            }
         }
+        """,
+        """
+        class C
+        {
+            void M()
+            {
+                var v = new { Value = new { Type = this.GetType(), V = this.ToString() } };
+            }
+        }
+        """);
+    }
+
+    [Fact]
+    public async Task TestFixAll3()
+    {
+        await TestInRegularAndScript1Async(
+        """
+        class C
+        {
+            void M()
+            {
+                var v = new { {|FixAllInDocument:|}new { this.GetType(), this.GetType() } };
+            }
+        }
+        """,
+        """
+        class C
+        {
+            void M()
+            {
+                var v = new { Value = new { Type = this.GetType(), Type1 = this.GetType() } };
+            }
+        }
+        """);
     }
 }

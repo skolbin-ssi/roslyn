@@ -8,7 +8,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces;
 using Microsoft.CodeAnalysis.Test.Utilities;
 using Microsoft.VisualStudio.LanguageServices.CSharp.LanguageService;
 using Microsoft.VisualStudio.LanguageServices.Implementation.F1Help;
@@ -263,6 +262,14 @@ class Program<T> wh[||]ere T : class
         {
             await TestAsync(
 @"#regi[||]on
+#endregion", "#region");
+        }
+
+        [Fact]
+        public async Task TestPreprocessor2()
+        {
+            await TestAsync(
+@"#region[||]
 #endregion", "#region");
         }
 
@@ -767,7 +774,7 @@ class Program
 }", "System.Int32");
         }
 
-        [Fact, WorkItem(864266, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/864266")]
+        [Fact, WorkItem("http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/864266")]
         public async Task TestConstantField()
         {
             await TestAsync(
@@ -780,7 +787,7 @@ class Program
 }", "System.Int32.MaxValue");
         }
 
-        [Fact, WorkItem(862420, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/862420")]
+        [Fact, WorkItem("http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/862420")]
         public async Task TestParameter()
         {
             await TestAsync(
@@ -798,7 +805,35 @@ class Program
 }", "System.Int32");
         }
 
-        [Fact, WorkItem(862420, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/862420")]
+        [Fact]
+        public async Task TestRefReadonlyParameter_Ref()
+        {
+            await TestAsync(
+                """
+                class C
+                {
+                    void M(r[||]ef readonly int x)
+                    {
+                    }
+                }
+                """, "ref_CSharpKeyword");
+        }
+
+        [Fact]
+        public async Task TestRefReadonlyParameter_ReadOnly()
+        {
+            await TestAsync(
+                """
+                class C
+                {
+                    void M(ref read[||]only int x)
+                    {
+                    }
+                }
+                """, "readonly_CSharpKeyword");
+        }
+
+        [Fact, WorkItem("http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/862420")]
         public async Task TestArgumentType()
         {
             await TestAsync(
@@ -880,7 +915,7 @@ public class C
 ", "yield_CSharpKeyword");
         }
 
-        [Fact, WorkItem(862396, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/862396")]
+        [Fact, WorkItem("http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/862396")]
         public async Task TestNoToken()
         {
             await TestAsync(
@@ -892,7 +927,7 @@ public class C
 }[||]", "vs.texteditor");
         }
 
-        [Fact, WorkItem(862328, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/862328")]
+        [Fact, WorkItem("http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/862328")]
         public async Task TestLiteral()
         {
             await TestAsync(
@@ -905,7 +940,7 @@ public class C
 }", "System.String");
         }
 
-        [Fact, WorkItem(862478, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/862478")]
+        [Fact, WorkItem("http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/862478")]
         public async Task TestColonColon()
         {
             await TestAsync(
@@ -923,7 +958,7 @@ class Program
 }", "::_CSharpKeyword");
         }
 
-        [Fact, WorkItem(46986, "https://github.com/dotnet/roslyn/issues/46986")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/46986")]
         public async Task TestStringInterpolation()
         {
             await TestAsync(
@@ -983,7 +1018,7 @@ class Program
 }", "Utf8StringLiteral_CSharpKeyword");
         }
 
-        [Fact, WorkItem(46986, "https://github.com/dotnet/roslyn/issues/46986")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/46986")]
         public async Task TestVerbatimString()
         {
             await TestAsync(
@@ -998,7 +1033,7 @@ class Program
 }", "@_CSharpKeyword");
         }
 
-        [Fact, WorkItem(46986, "https://github.com/dotnet/roslyn/issues/46986")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/46986")]
         public async Task TestVerbatimInterpolatedString1()
         {
             await TestAsync(
@@ -1013,7 +1048,7 @@ class Program
 }", "@$_CSharpKeyword");
         }
 
-        [Fact, WorkItem(46986, "https://github.com/dotnet/roslyn/issues/46986")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/46986")]
         public async Task TestVerbatimInterpolatedString2()
         {
             await TestAsync(
@@ -1028,7 +1063,7 @@ class Program
 }", "@$_CSharpKeyword");
         }
 
-        [Fact, WorkItem(864658, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/864658")]
+        [Fact, WorkItem("http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/864658")]
         public async Task TestNullable()
         {
             await TestAsync(
@@ -1047,7 +1082,7 @@ class Program
 }", "System.Nullable`1");
         }
 
-        [Fact, WorkItem(863517, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/863517")]
+        [Fact, WorkItem("http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/863517")]
         public async Task TestAfterLastToken()
         {
             await TestAsync(
@@ -1094,7 +1129,7 @@ class Program
 }", "System.Int32");
         }
 
-        [Fact, WorkItem(867574, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/867574")]
+        [Fact, WorkItem("http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/867574")]
         public async Task TestFatArrow()
         {
             await TestAsync(
@@ -1108,7 +1143,7 @@ class Program
 }", "=>_CSharpKeyword");
         }
 
-        [Fact, WorkItem(867572, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/867572")]
+        [Fact, WorkItem("http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/867572")]
         public async Task TestSubscription()
         {
             await TestAsync(
@@ -1124,13 +1159,13 @@ class Program
 }", "+=_CSharpKeyword");
         }
 
-        [Fact, WorkItem(867554, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/867554")]
+        [Fact, WorkItem("http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/867554")]
         public async Task TestComment()
         {
             await TestAsync(@"// some comm[||]ents here", "comments");
         }
 
-        [Fact, WorkItem(867529, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/867529")]
+        [Fact, WorkItem("http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/867529")]
         public async Task TestDynamic()
         {
             await TestAsync(
@@ -1162,7 +1197,7 @@ class Program
 }", "System.String");
         }
 
-        [Fact, WorkItem(36001, "https://github.com/dotnet/roslyn/issues/36001")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/36001")]
         public async Task TestNameof()
         {
             await Test_KeywordAsync(
@@ -1175,7 +1210,7 @@ class Program
 }", "nameof");
         }
 
-        [Fact, WorkItem(46988, "https://github.com/dotnet/roslyn/issues/46988")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/46988")]
         public async Task TestNullForgiving()
         {
             await Test_KeywordAsync(
@@ -1189,7 +1224,7 @@ class C
 }", "nullForgiving");
         }
 
-        [Fact, WorkItem(46988, "https://github.com/dotnet/roslyn/issues/46988")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/46988")]
         public async Task TestLogicalNot()
         {
             await Test_KeywordAsync(
@@ -1202,7 +1237,7 @@ class C
 }", "!");
         }
 
-        [Fact, WorkItem(48392, "https://github.com/dotnet/roslyn/issues/48392")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/48392")]
         public async Task TestDefaultSwitchCase()
         {
             await Test_KeywordAsync(
@@ -1219,7 +1254,7 @@ class C
 }", "defaultcase");
         }
 
-        [Fact, WorkItem(48392, "https://github.com/dotnet/roslyn/issues/48392")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/48392")]
         public async Task TestDefaultLiteralExpressionInsideSwitch()
         {
             await Test_KeywordAsync(
@@ -1236,7 +1271,7 @@ class C
 }", "default");
         }
 
-        [Fact, WorkItem(48392, "https://github.com/dotnet/roslyn/issues/48392")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/48392")]
         public async Task TestDefaultExpressionInsideSwitch()
         {
             await Test_KeywordAsync(
@@ -1253,7 +1288,7 @@ class C
 }", "default");
         }
 
-        [Fact, WorkItem(48392, "https://github.com/dotnet/roslyn/issues/48392")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/48392")]
         public async Task TestDefaultLiteralExpression()
         {
             await Test_KeywordAsync(
@@ -1263,7 +1298,7 @@ class C
 }", "default");
         }
 
-        [Fact, WorkItem(48392, "https://github.com/dotnet/roslyn/issues/48392")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/48392")]
         public async Task TestDefaultExpression()
         {
             await Test_KeywordAsync(
@@ -1273,7 +1308,7 @@ class C
 }", "default");
         }
 
-        [Fact, WorkItem(48392, "https://github.com/dotnet/roslyn/issues/48392")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/48392")]
         public async Task TestDefaultLiteralExpressionInOptionalParameter()
         {
             await Test_KeywordAsync(
@@ -1284,7 +1319,7 @@ class C
 }", "default");
         }
 
-        [Fact, WorkItem(48392, "https://github.com/dotnet/roslyn/issues/48392")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/48392")]
         public async Task TestDefaultExpressionInOptionalParameter()
         {
             await Test_KeywordAsync(
@@ -1295,7 +1330,7 @@ class C
 }", "default");
         }
 
-        [Fact, WorkItem(48392, "https://github.com/dotnet/roslyn/issues/48392")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/48392")]
         public async Task TestDefaultLiteralExpressionInMethodCall()
         {
             await Test_KeywordAsync(
@@ -1307,7 +1342,7 @@ class C
 }", "default");
         }
 
-        [Fact, WorkItem(48392, "https://github.com/dotnet/roslyn/issues/48392")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/48392")]
         public async Task TestDefaultExpressionInMethodCall()
         {
             await Test_KeywordAsync(
@@ -1319,7 +1354,7 @@ class C
 }", "default");
         }
 
-        [Fact, WorkItem(48392, "https://github.com/dotnet/roslyn/issues/48392")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/48392")]
         public async Task TestOuterClassDeclaration()
         {
             await Test_KeywordAsync(
@@ -1329,7 +1364,7 @@ class C
 }", "class");
         }
 
-        [Fact, WorkItem(48392, "https://github.com/dotnet/roslyn/issues/48392")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/48392")]
         public async Task TestInnerClassDeclaration()
         {
             await Test_KeywordAsync(
@@ -1339,7 +1374,7 @@ class C
 }", "class");
         }
 
-        [Fact, WorkItem(48392, "https://github.com/dotnet/roslyn/issues/48392")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/48392")]
         public async Task TestClassConstraintInOuterClass()
         {
             await Test_KeywordAsync(
@@ -1349,7 +1384,7 @@ class C
 }", "classconstraint");
         }
 
-        [Fact, WorkItem(48392, "https://github.com/dotnet/roslyn/issues/48392")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/48392")]
         public async Task TestClassConstraintInInnerClass()
         {
             await Test_KeywordAsync(
@@ -1359,7 +1394,7 @@ class C
 }", "classconstraint");
         }
 
-        [Fact, WorkItem(48392, "https://github.com/dotnet/roslyn/issues/48392")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/48392")]
         public async Task TestClassConstraintInGenericMethod()
         {
             await Test_KeywordAsync(
@@ -1369,7 +1404,7 @@ class C
 }", "classconstraint");
         }
 
-        [Fact, WorkItem(48392, "https://github.com/dotnet/roslyn/issues/48392")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/48392")]
         public async Task TestClassConstraintInGenericDelegate()
         {
             await Test_KeywordAsync(
@@ -1379,7 +1414,7 @@ class C
 }", "classconstraint");
         }
 
-        [Fact, WorkItem(48392, "https://github.com/dotnet/roslyn/issues/48392")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/48392")]
         public async Task TestOuterStructDeclaration()
         {
             await Test_KeywordAsync(
@@ -1389,7 +1424,7 @@ class C
 }", "struct");
         }
 
-        [Fact, WorkItem(48392, "https://github.com/dotnet/roslyn/issues/48392")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/48392")]
         public async Task TestInnerStructDeclaration()
         {
             await Test_KeywordAsync(
@@ -1399,7 +1434,7 @@ class C
 }", "struct");
         }
 
-        [Fact, WorkItem(48392, "https://github.com/dotnet/roslyn/issues/48392")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/48392")]
         public async Task TestStructConstraintInOuterStruct()
         {
             await Test_KeywordAsync(
@@ -1409,7 +1444,7 @@ class C
 }", "structconstraint");
         }
 
-        [Fact, WorkItem(48392, "https://github.com/dotnet/roslyn/issues/48392")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/48392")]
         public async Task TestStructConstraintInInnerStruct()
         {
             await Test_KeywordAsync(
@@ -1419,7 +1454,7 @@ class C
 }", "structconstraint");
         }
 
-        [Fact, WorkItem(48392, "https://github.com/dotnet/roslyn/issues/48392")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/48392")]
         public async Task TestStructConstraintInGenericMethod()
         {
             await Test_KeywordAsync(
@@ -1429,7 +1464,7 @@ class C
 }", "structconstraint");
         }
 
-        [Fact, WorkItem(48392, "https://github.com/dotnet/roslyn/issues/48392")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/48392")]
         public async Task TestStructConstraintInGenericDelegate()
         {
             await Test_KeywordAsync(
@@ -1439,7 +1474,20 @@ class C
 }", "structconstraint");
         }
 
-        [Fact, WorkItem(48392, "https://github.com/dotnet/roslyn/issues/48392")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/48392")]
+        public async Task TestAllowsRefStructAntiConstraint()
+        {
+            await Test_KeywordAsync(
+@"class C
+{ 
+    void M<T>()
+        where T : all[||]ows ref struct
+    {
+    }
+}", "allows");
+        }
+
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/48392")]
         public async Task TestUsingStaticOnUsingKeyword()
         {
             await Test_KeywordAsync(
@@ -1453,7 +1501,7 @@ static class C
 }", "using-static");
         }
 
-        [Fact, WorkItem(48392, "https://github.com/dotnet/roslyn/issues/48392")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/48392")]
         public async Task TestNormalUsingDirective()
         {
             await Test_KeywordAsync(
@@ -1467,7 +1515,7 @@ static class C
 }", "using");
         }
 
-        [Fact, WorkItem(48392, "https://github.com/dotnet/roslyn/issues/48392")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/48392")]
         public async Task TestUsingStatement()
         {
             await Test_KeywordAsync(
@@ -1483,7 +1531,7 @@ class C
 }", "using-statement");
         }
 
-        [Fact, WorkItem(48392, "https://github.com/dotnet/roslyn/issues/48392")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/48392")]
         public async Task TestUsingDeclaration()
         {
             await Test_KeywordAsync(
@@ -1497,7 +1545,7 @@ class C
 }", "using-statement");
         }
 
-        [Fact, WorkItem(48392, "https://github.com/dotnet/roslyn/issues/48392")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/48392")]
         public async Task TestUsingStaticOnStaticKeyword()
         {
             await Test_KeywordAsync(
@@ -1511,7 +1559,7 @@ static class C
 }", "using-static");
         }
 
-        [Fact, WorkItem(48392, "https://github.com/dotnet/roslyn/issues/48392")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/48392")]
         public async Task TestStaticClass()
         {
             await Test_KeywordAsync(
@@ -1525,7 +1573,7 @@ sta[||]tic class C
 }", "static");
         }
 
-        [Fact, WorkItem(48392, "https://github.com/dotnet/roslyn/issues/48392")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/48392")]
         public async Task TestStaticField()
         {
             await Test_KeywordAsync(
@@ -1539,7 +1587,7 @@ static class C
 }", "static");
         }
 
-        [Fact, WorkItem(48392, "https://github.com/dotnet/roslyn/issues/48392")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/48392")]
         public async Task TestStaticMethod()
         {
             await Test_KeywordAsync(
@@ -1803,7 +1851,7 @@ class C
                 """, expectedText: "defaultline");
         }
 
-        [Fact, WorkItem(65311, "https://github.com/dotnet/roslyn/issues/65311")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/65311")]
         public async Task TestNotnull_OnType()
         {
             await Test_KeywordAsync("""
@@ -1813,7 +1861,7 @@ class C
                 """, expectedText: "notnull");
         }
 
-        [Fact, WorkItem(65311, "https://github.com/dotnet/roslyn/issues/65311")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/65311")]
         public async Task TestNotnull_OnMethod()
         {
             await Test_KeywordAsync("""
@@ -1826,7 +1874,7 @@ class C
                 """, expectedText: "notnull");
         }
 
-        [Fact, WorkItem(65311, "https://github.com/dotnet/roslyn/issues/65311")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/65311")]
         public async Task TestNotnull_FieldName()
         {
             await TestAsync("""
@@ -1837,7 +1885,7 @@ class C
                 """, expectedText: "C.notnull");
         }
 
-        [Fact, WorkItem(65311, "https://github.com/dotnet/roslyn/issues/65311")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/65311")]
         public async Task TestUnmanaged_OnType()
         {
             await Test_KeywordAsync("""
@@ -1847,7 +1895,7 @@ class C
                 """, expectedText: "unmanaged");
         }
 
-        [Fact, WorkItem(65311, "https://github.com/dotnet/roslyn/issues/65311")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/65311")]
         public async Task TestUnmanaged_OnMethod()
         {
             await Test_KeywordAsync("""
@@ -1860,7 +1908,7 @@ class C
                 """, expectedText: "unmanaged");
         }
 
-        [Fact, WorkItem(65311, "https://github.com/dotnet/roslyn/issues/65311")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/65311")]
         public async Task TestUnmanaged_LocalName()
         {
             await TestAsync("""
@@ -1868,7 +1916,7 @@ class C
                 """, expectedText: "System.Int32");
         }
 
-        [Fact, WorkItem(65312, "https://github.com/dotnet/roslyn/issues/65312")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/65312")]
         public async Task TestSwitchStatement()
         {
             await Test_KeywordAsync("""
@@ -1876,7 +1924,7 @@ class C
                 """, expectedText: "switch");
         }
 
-        [Fact, WorkItem(65312, "https://github.com/dotnet/roslyn/issues/65312")]
+        [Fact, WorkItem("https://github.com/dotnet/roslyn/issues/65312")]
         public async Task TestSwitchExpression()
         {
             await Test_KeywordAsync("""
@@ -1914,6 +1962,79 @@ class C
             await Test_KeywordAsync("""
                 1 >>[||]>= 2;
                 """, expectedText: ">>>=");
+        }
+
+        [Fact]
+        public async Task TestPreprocessorIf()
+        {
+            await TestAsync(
+@"
+#i[||]f ANY
+#endif
+", "#if");
+        }
+
+        [Fact]
+        public async Task TestPreprocessorIf2()
+        {
+            await TestAsync(
+@"
+#if ANY[||]
+#endif
+", "#if");
+        }
+
+        [Fact]
+        public async Task TestPreprocessorEndIf()
+        {
+            await TestAsync(
+@"
+#if ANY
+#en[||]dif
+", "#endif");
+        }
+
+        [Fact]
+        public async Task TestPreprocessorEndIf2()
+        {
+            await TestAsync(
+@"
+#if ANY
+#endif[||]
+", "#endif");
+        }
+
+        [Fact]
+        public async Task TestPreprocessorElse()
+        {
+            await TestAsync(
+@"
+#if ANY
+#el[||]se
+#endif
+", "#else");
+        }
+
+        [Fact]
+        public async Task TestPreprocessorElse2()
+        {
+            await TestAsync(
+@"
+#if ANY
+#else[||]
+#endif
+", "#else");
+        }
+
+        [Fact]
+        public async Task TestPreprocessorElIf()
+        {
+            await TestAsync(
+@"
+#if ANY
+#el[||]if SOME
+#endif
+", "#elif");
         }
     }
 }

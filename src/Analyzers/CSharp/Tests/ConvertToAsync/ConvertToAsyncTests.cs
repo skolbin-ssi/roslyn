@@ -9,49 +9,52 @@ using Microsoft.CodeAnalysis.Test.Utilities;
 using Microsoft.CodeAnalysis.Testing;
 using Xunit;
 
-namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.ConvertToAsync
+namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.ConvertToAsync;
+
+using VerifyCS = CSharpCodeFixVerifier<
+    EmptyDiagnosticAnalyzer,
+    CSharpConvertToAsyncMethodCodeFixProvider>;
+
+public sealed class ConvertToAsyncTests
 {
-    using VerifyCS = CSharpCodeFixVerifier<
-        EmptyDiagnosticAnalyzer,
-        CSharpConvertToAsyncMethodCodeFixProvider>;
-
-    public sealed class ConvertToAsyncTests
+    [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsChangeToAsync)]
+    public async Task CantAwaitAsyncVoid()
     {
-        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsChangeToAsync)]
-        public async Task CantAwaitAsyncVoid()
-        {
-            var initial =
-@"using System.Threading.Tasks;
+        var initial =
+            """
+            using System.Threading.Tasks;
 
-class Program
-{
-    async Task rtrt()
-    {
-        {|CS4008:await gt()|};
-    }
+            class Program
+            {
+                async Task rtrt()
+                {
+                    {|CS4008:await gt()|};
+                }
 
-    async void gt()
-    {
-    }
-}";
+                async void gt()
+                {
+                }
+            }
+            """;
 
-            var expected =
-@"using System.Threading.Tasks;
+        var expected =
+            """
+            using System.Threading.Tasks;
 
-class Program
-{
-    async Task rtrt()
-    {
-        await gt();
-    }
+            class Program
+            {
+                async Task rtrt()
+                {
+                    await gt();
+                }
 
-    async 
-    Task
-gt()
-    {
-    }
-}";
-            await VerifyCS.VerifyCodeFixAsync(initial, expected);
-        }
+                async 
+                Task
+            gt()
+                {
+                }
+            }
+            """;
+        await VerifyCS.VerifyCodeFixAsync(initial, expected);
     }
 }

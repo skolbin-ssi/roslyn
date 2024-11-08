@@ -13,7 +13,7 @@ using Microsoft.CodeAnalysis.Test.Utilities;
 using Roslyn.Test.Utilities;
 using Roslyn.Utilities;
 using Xunit;
-using static Roslyn.Test.Utilities.TestMetadata;
+using Basic.Reference.Assemblies;
 
 namespace Microsoft.CodeAnalysis.CSharp.UnitTests.CodeGen
 {
@@ -23,10 +23,10 @@ namespace Microsoft.CodeAnalysis.CSharp.UnitTests.CodeGen
         {
             options = options ?? TestOptions.ReleaseExe;
 
-            IEnumerable<MetadataReference> asyncRefs = new[] { Net451.System, Net451.SystemCore, Net451.MicrosoftCSharp };
+            IEnumerable<MetadataReference> asyncRefs = new[] { NetFramework.System, NetFramework.SystemCore, NetFramework.MicrosoftCSharp };
             references = (references != null) ? references.Concat(asyncRefs) : asyncRefs;
 
-            return CreateCompilationWithMscorlib45(source, options: options, references: references);
+            return CreateCompilationWithMscorlib461(source, options: options, references: references);
         }
 
         private CompilationVerifier CompileAndVerify(string source, string expectedOutput, IEnumerable<MetadataReference> references = null, CSharpCompilationOptions options = null, Verification verify = default)
@@ -54,7 +54,7 @@ class Test
         F(123).Wait();
     }
 }";
-            var c = CreateCompilationWithMscorlib45(source);
+            var c = CreateCompilationWithMscorlib461(source);
 
             CompilationOptions options;
 
@@ -869,6 +869,207 @@ class Driver
     }
 }";
             CompileAndVerify(source, expectedOutput: "0", options: TestOptions.UnsafeReleaseExe, verify: Verification.Fails);
+        }
+
+        [Fact]
+        [WorkItem("https://github.com/dotnet/roslyn/issues/66829")]
+        public void AddressOf_WithinAwaitBoundary()
+        {
+            var source = """
+                using System;
+                using System.Threading.Tasks;
+
+                class Program
+                {
+                    public static async Task Main()
+                    {
+                        long x = 1;
+
+                        unsafe
+                        {
+                            Console.Write(*&x);
+                        }
+
+                        unsafe
+                        {
+                            Console.Write(*&x);
+                        }
+
+                        await Task.Delay(1000);
+                    }
+                }
+                """;
+
+            var diagnostics = new[]
+            {
+                // (12,29): warning CS9123: The '&' operator should not be used on parameters or local variables in async methods.
+                //             Console.Write(*&x);
+                Diagnostic(ErrorCode.WRN_AddressOfInAsync, "x").WithLocation(12, 29),
+                // (17,29): warning CS9123: The '&' operator should not be used on parameters or local variables in async methods.
+                //             Console.Write(*&x);
+                Diagnostic(ErrorCode.WRN_AddressOfInAsync, "x").WithLocation(17, 29)
+            };
+
+            CompileAndVerify(source, options: TestOptions.UnsafeDebugExe.WithMetadataImportOptions(MetadataImportOptions.All), expectedOutput: "11", symbolValidator: debugSymbolValidator, verify: Verification.Fails)
+                .VerifyDiagnostics(diagnostics);
+            CompileAndVerify(source, options: TestOptions.UnsafeReleaseExe.WithMetadataImportOptions(MetadataImportOptions.All), expectedOutput: "11", symbolValidator: releaseSymbolValidator, verify: Verification.Fails)
+                .VerifyDiagnostics(diagnostics);
+
+            void debugSymbolValidator(ModuleSymbol module)
+            {
+                var stateMachine = module.GlobalNamespace.GetMember<NamedTypeSymbol>("Program.<Main>d__0");
+                var hoistedField = stateMachine.GetMember<FieldSymbol>("<x>5__1");
+                Assert.Equal(SpecialType.System_Int64, hoistedField.Type.SpecialType);
+            }
+
+            void releaseSymbolValidator(ModuleSymbol module)
+            {
+                var stateMachine = module.GlobalNamespace.GetMember<NamedTypeSymbol>("Program.<Main>d__0");
+                // Test that there is no state-machine field based on 'x'.
+                Assert.Empty(stateMachine.GetMembers().Where(m => m.Name.StartsWith("<x>")));
+            }
+        }
+
+        [Fact]
+        [WorkItem("https://github.com/dotnet/roslyn/issues/66829")]
+        public void AddressOf_AcrossAwaitBoundary()
+        {
+            var source = """
+                using System;
+                using System.Threading.Tasks;
+
+                class Program
+                {
+                    public static async Task Main()
+                    {
+                        long x = 1;
+
+                        unsafe
+                        {
+                            Console.Write(*&x);
+                        }
+
+                        await Task.Delay(1000);
+
+                        unsafe
+                        {
+                            Console.Write(*&x);
+                        }
+                    }
+                }
+                """;
+
+            var diagnostics = new[]
+            {
+                // (12,29): warning CS9123: The '&' operator should not be used on parameters or local variables in async methods.
+                //             Console.Write(*&x);
+                Diagnostic(ErrorCode.WRN_AddressOfInAsync, "x").WithLocation(12, 29),
+                // (19,29): warning CS9123: The '&' operator should not be used on parameters or local variables in async methods.
+                //             Console.Write(*&x);
+                Diagnostic(ErrorCode.WRN_AddressOfInAsync, "x").WithLocation(19, 29)
+            };
+
+            CompileAndVerify(source, options: TestOptions.UnsafeDebugExe.WithMetadataImportOptions(MetadataImportOptions.All), expectedOutput: "11", symbolValidator: debugSymbolValidator, verify: Verification.Fails)
+                .VerifyDiagnostics(diagnostics);
+            CompileAndVerify(source, options: TestOptions.UnsafeReleaseExe.WithMetadataImportOptions(MetadataImportOptions.All), expectedOutput: "10", symbolValidator: releaseSymbolValidator, verify: Verification.Fails)
+                .VerifyDiagnostics(diagnostics);
+
+            void debugSymbolValidator(ModuleSymbol module)
+            {
+                var stateMachine = module.GlobalNamespace.GetMember<NamedTypeSymbol>("Program.<Main>d__0");
+                var hoistedField = stateMachine.GetMember<FieldSymbol>("<x>5__1");
+                Assert.Equal(SpecialType.System_Int64, hoistedField.Type.SpecialType);
+            }
+
+            void releaseSymbolValidator(ModuleSymbol module)
+            {
+                var stateMachine = module.GlobalNamespace.GetMember<NamedTypeSymbol>("Program.<Main>d__0");
+                // Test that there is no state-machine field based on 'x'.
+                Assert.Empty(stateMachine.GetMembers().Where(m => m.Name.StartsWith("<x>")));
+            }
+        }
+
+        [Fact]
+        [WorkItem("https://github.com/dotnet/roslyn/issues/66829")]
+        public void AddressOf_Fixed()
+        {
+            var source = """
+                using System.Threading.Tasks;
+                // This async method lacks 'await' operators and will run synchronously. Consider using the 'await' operator to await non-blocking API calls, or 'await Task.Run(...)' to do CPU-bound work on a background thread.
+                #pragma warning disable 1998
+                class Program
+                {
+                    int F;
+
+                    public static unsafe async Task Main()
+                    {
+                        Program prog = new Program();
+                        int* ptr = &prog.F; // 1
+                        fixed (int* ptr1 = &prog.F) { }
+
+                        int local = 0;
+                        int* localPtr = &local; // 2
+                        fixed (int* localPtr1 = &local) { } // 3, 4
+
+                        S structLocal = default;
+                        int* innerPtr = &structLocal.F; // 5
+                        fixed (int* innerPtr1 = &structLocal.F) { } // 6, 7
+
+                        localFunc();
+                        void localFunc()
+                        {
+                            int localFuncLocal = 0;
+                            int* localFuncLocalPtr = &localFuncLocal;
+                        }
+
+                        _ = asyncLocalFunc();
+                        async Task asyncLocalFunc()
+                        {
+                            int localFuncLocal = 0;
+                            int* localFuncLocalPtr = &localFuncLocal; // 8
+                        }
+                    }
+                }
+
+                struct S { public int F; }
+                """;
+
+            CreateCompilation(source, options: TestOptions.UnsafeDebugExe).VerifyDiagnostics(
+                // (11,20): error CS0212: You can only take the address of an unfixed expression inside of a fixed statement initializer
+                //         int* ptr = &prog.F; // 1
+                Diagnostic(ErrorCode.ERR_FixedNeeded, "&prog.F").WithLocation(11, 20),
+                // (15,26): warning CS9123: The '&' operator should not be used on parameters or local variables in async methods.
+                //         int* localPtr = &local; // 2
+                Diagnostic(ErrorCode.WRN_AddressOfInAsync, "local").WithLocation(15, 26),
+                // (16,33): error CS0213: You cannot use the fixed statement to take the address of an already fixed expression
+                //         fixed (int* localPtr1 = &local) { } // 3, 4
+                Diagnostic(ErrorCode.ERR_FixedNotNeeded, "&local").WithLocation(16, 33),
+                // (16,34): warning CS9123: The '&' operator should not be used on parameters or local variables in async methods.
+                //         fixed (int* localPtr1 = &local) { } // 3, 4
+                Diagnostic(ErrorCode.WRN_AddressOfInAsync, "local").WithLocation(16, 34),
+                // (19,26): warning CS9123: The '&' operator should not be used on parameters or local variables in async methods.
+                //         int* innerPtr = &structLocal.F; // 5
+                Diagnostic(ErrorCode.WRN_AddressOfInAsync, "structLocal.F").WithLocation(19, 26),
+                // (20,33): error CS0213: You cannot use the fixed statement to take the address of an already fixed expression
+                //         fixed (int* innerPtr1 = &structLocal.F) { } // 6, 7
+                Diagnostic(ErrorCode.ERR_FixedNotNeeded, "&structLocal.F").WithLocation(20, 33),
+                // (20,34): warning CS9123: The '&' operator should not be used on parameters or local variables in async methods.
+                //         fixed (int* innerPtr1 = &structLocal.F) { } // 6, 7
+                Diagnostic(ErrorCode.WRN_AddressOfInAsync, "structLocal.F").WithLocation(20, 34),
+                // (33,39): warning CS9123: The '&' operator should not be used on parameters or local variables in async methods.
+                //             int* localFuncLocalPtr = &localFuncLocal; // 8
+                Diagnostic(ErrorCode.WRN_AddressOfInAsync, "localFuncLocal").WithLocation(33, 39));
+
+            CreateCompilation(source, options: TestOptions.UnsafeDebugExe.WithWarningLevel(7)).VerifyDiagnostics(
+                // (11,20): error CS0212: You can only take the address of an unfixed expression inside of a fixed statement initializer
+                //         int* ptr = &prog.F; // 1
+                Diagnostic(ErrorCode.ERR_FixedNeeded, "&prog.F").WithLocation(11, 20),
+                // (16,33): error CS0213: You cannot use the fixed statement to take the address of an already fixed expression
+                //         fixed (int* localPtr1 = &local) { } // 3, 4
+                Diagnostic(ErrorCode.ERR_FixedNotNeeded, "&local").WithLocation(16, 33),
+                // (20,33): error CS0213: You cannot use the fixed statement to take the address of an already fixed expression
+                //         fixed (int* innerPtr1 = &structLocal.F) { } // 6, 7
+                Diagnostic(ErrorCode.ERR_FixedNotNeeded, "&structLocal.F").WithLocation(20, 33));
         }
 
         [Fact]
@@ -3103,7 +3304,7 @@ class C
 }
 ";
 
-            var comp = CSharpTestBase.CreateEmptyCompilation(source, new[] { Net40.mscorlib }, TestOptions.ReleaseDll); // NOTE: 4.0, not 4.5, so it's missing the async helpers.
+            var comp = CSharpTestBase.CreateEmptyCompilation(source, new[] { Net40.References.mscorlib }, TestOptions.ReleaseDll); // NOTE: 4.0, not 4.5, so it's missing the async helpers.
 
             // CONSIDER: It would be nice if we didn't squiggle the whole method body, but this is a corner case.
             comp.VerifyEmitDiagnostics(
@@ -3133,7 +3334,7 @@ class C
 {
     async Task M() {}
 }";
-            var comp = CSharpTestBase.CreateEmptyCompilation(source, new[] { Net40.mscorlib }, TestOptions.ReleaseDll); // NOTE: 4.0, not 4.5, so it's missing the async helpers.
+            var comp = CSharpTestBase.CreateEmptyCompilation(source, new[] { Net40.References.mscorlib }, TestOptions.ReleaseDll); // NOTE: 4.0, not 4.5, so it's missing the async helpers.
             comp.VerifyEmitDiagnostics(
                 // (4,16): warning CS1998: This async method lacks 'await' operators and will run synchronously. Consider using the 'await' operator to await non-blocking API calls, or 'await Task.Run(...)' to do CPU-bound work on a background thread.
                 //     async Task M() {}
@@ -3164,7 +3365,7 @@ class C
 {
     async Task<int> F() => 3;
 }";
-            var comp = CSharpTestBase.CreateEmptyCompilation(source, new[] { Net40.mscorlib }, TestOptions.ReleaseDll); // NOTE: 4.0, not 4.5, so it's missing the async helpers.
+            var comp = CSharpTestBase.CreateEmptyCompilation(source, new[] { Net40.References.mscorlib }, TestOptions.ReleaseDll); // NOTE: 4.0, not 4.5, so it's missing the async helpers.
             comp.VerifyEmitDiagnostics(
                 // (4,21): warning CS1998: This async method lacks 'await' operators and will run synchronously. Consider using the 'await' operator to await non-blocking API calls, or 'await Task.Run(...)' to do CPU-bound work on a background thread.
                 //     async Task<int> F() => 3;
@@ -3502,7 +3703,7 @@ namespace System.Runtime.CompilerServices { class AsyncMethodBuilderAttribute : 
         {
             // Builder
             var libB = @"public class B { }";
-            var cB = CreateCompilationWithMscorlib45(libB);
+            var cB = CreateCompilationWithMscorlib461(libB);
             var rB = cB.EmitToImageReference();
 
             // Tasklike
@@ -3513,7 +3714,7 @@ using System.Runtime.CompilerServices;
 
 namespace System.Runtime.CompilerServices { class AsyncMethodBuilderAttribute : System.Attribute { public AsyncMethodBuilderAttribute(System.Type t) { } } }
 ";
-            var cT = CreateCompilationWithMscorlib45(libT, references: new[] { rB });
+            var cT = CreateCompilationWithMscorlib461(libT, references: new[] { rB });
             var rT = cT.EmitToImageReference();
 
             // Consumer, fails to reference builder
@@ -3525,7 +3726,7 @@ class Program {
     async T f() => await Task.Delay(1);
 }
 ";
-            var c = CreateCompilationWithMscorlib45(source, references: new[] { rT });
+            var c = CreateCompilationWithMscorlib461(source, references: new[] { rT });
             c.VerifyEmitDiagnostics(
                 // (6,17): error CS1983: The return type of an async method must be void, Task or Task<T>
                 //     async T f() => await Task.Delay(1);
@@ -3822,7 +4023,7 @@ class Mismatch2MethodBuilder<T>
 }
 namespace System.Runtime.CompilerServices { class AsyncMethodBuilderAttribute : System.Attribute { public AsyncMethodBuilderAttribute(System.Type t) { } } }
 ";
-            var comp = CreateCompilationWithMscorlib45(source);
+            var comp = CreateCompilationWithMscorlib461(source);
             comp.VerifyEmitDiagnostics(
                 // (5,30): error CS8940: A generic task-like return type was expected, but the type 'Mismatch1MethodBuilder' found in 'AsyncMethodBuilder' attribute was not suitable. It must be an unbound generic type of arity one, and its containing type (if any) must be non-generic.
                 //     async Mismatch1<int> f() { await (Task)null; return 1; }
@@ -4300,7 +4501,7 @@ namespace CompilerCrashRepro2
         {
             var source =
 @"System.Console.WriteLine(await System.Threading.Tasks.Task.FromResult(1));";
-            var compilation = CreateCompilationWithMscorlib45(source, parseOptions: TestOptions.Script, options: TestOptions.DebugExe);
+            var compilation = CreateCompilationWithMscorlib461(source, parseOptions: TestOptions.Script, options: TestOptions.DebugExe);
             compilation.VerifyDiagnostics();
         }
 
@@ -4309,7 +4510,7 @@ namespace CompilerCrashRepro2
         {
             var source =
 @"await System.Threading.Tasks.Task.FromResult(4);";
-            var compilation = CreateCompilationWithMscorlib45(source, parseOptions: TestOptions.Script, options: TestOptions.DebugExe);
+            var compilation = CreateCompilationWithMscorlib461(source, parseOptions: TestOptions.Script, options: TestOptions.DebugExe);
             compilation.VerifyDiagnostics();
         }
 
@@ -4319,7 +4520,7 @@ namespace CompilerCrashRepro2
             var source =
 @"int x = await System.Threading.Tasks.Task.Run(() => 2);
 System.Console.WriteLine(x);";
-            var compilation = CreateCompilationWithMscorlib45(source, parseOptions: TestOptions.Script, options: TestOptions.DebugExe);
+            var compilation = CreateCompilationWithMscorlib461(source, parseOptions: TestOptions.Script, options: TestOptions.DebugExe);
             compilation.VerifyDiagnostics();
         }
 
@@ -4363,7 +4564,7 @@ System.Console.WriteLine(x);";
     await System.Threading.Tasks.Task.FromResult(1);
 int y = x +
     await System.Threading.Tasks.Task.FromResult(2);";
-            var compilation = CreateCompilationWithMscorlib45(source, parseOptions: TestOptions.Script, options: TestOptions.DebugExe);
+            var compilation = CreateCompilationWithMscorlib461(source, parseOptions: TestOptions.Script, options: TestOptions.DebugExe);
             compilation.VerifyDiagnostics(
                 // (2,5): error CS8100: The 'await' operator cannot be used in a static script variable initializer.
                 //     await System.Threading.Tasks.Task.FromResult(1);
@@ -5692,10 +5893,10 @@ class IntCode
 ";
             var expected = new[]
             {
-                // (8,9): error CS8178: 'await' cannot be used in an expression containing a call to 'IntCode.ReadMemory()' because it returns by reference
+                // (8,9): error CS8178: A reference returned by a call to 'IntCode.ReadMemory()' cannot be preserved across 'await' or 'yield' boundary.
                 //         ReadMemory() = await t;
                 Diagnostic(ErrorCode.ERR_RefReturningCallAndAwait, "ReadMemory()").WithArguments("IntCode.ReadMemory()").WithLocation(8, 9),
-                // (9,9): error CS8178: 'await' cannot be used in an expression containing a call to 'IntCode.ReadMemory()' because it returns by reference
+                // (9,9): error CS8178: A reference returned by a call to 'IntCode.ReadMemory()' cannot be preserved across 'await' or 'yield' boundary.
                 //         ReadMemory() += await t;
                 Diagnostic(ErrorCode.ERR_RefReturningCallAndAwait, "ReadMemory()").WithArguments("IntCode.ReadMemory()").WithLocation(9, 9)
             };

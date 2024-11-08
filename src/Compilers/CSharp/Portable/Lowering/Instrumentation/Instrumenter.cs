@@ -2,11 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.CSharp.Symbols;
 using Microsoft.CodeAnalysis.Shared.Collections;
+using System.Collections.Immutable;
 
 namespace Microsoft.CodeAnalysis.CSharp
 {
@@ -55,6 +57,13 @@ namespace Microsoft.CodeAnalysis.CSharp
         }
 
         /// <summary>
+        /// Called before the statements of the <paramref name="original"/> block are lowered.
+        /// </summary>
+        public virtual void PreInstrumentBlock(BoundBlock original, LocalRewriter rewriter)
+        {
+        }
+
+        /// <summary>
         /// Instruments <paramref name="original"/> block.
         /// </summary>
         /// <param name="original">Original block.</param>
@@ -62,10 +71,11 @@ namespace Microsoft.CodeAnalysis.CSharp
         /// <param name="additionalLocals">Local symbols to be added to <see cref="BoundBlock.Locals"/> of the resulting block.</param>
         /// <param name="prologue">Node to be added to the beginning of the statement list of the instrumented block.</param>
         /// <param name="epilogue">Node to be added at the end of the statement list of the instrumented block.</param>
-        public virtual void InstrumentBlock(BoundBlock original, LocalRewriter rewriter, ref TemporaryArray<LocalSymbol> additionalLocals, out BoundStatement? prologue, out BoundStatement? epilogue)
+        public virtual void InstrumentBlock(BoundBlock original, LocalRewriter rewriter, ref TemporaryArray<LocalSymbol> additionalLocals, out BoundStatement? prologue, out BoundStatement? epilogue, out BoundBlockInstrumentation? instrumentation)
         {
             prologue = null;
             epilogue = null;
+            instrumentation = null;
         }
 
         public virtual BoundStatement InstrumentThrowStatement(BoundThrowStatement original, BoundStatement rewritten)
@@ -179,7 +189,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             return rewrittenCondition;
         }
 
-        public virtual BoundStatement InstrumentIfStatement(BoundIfStatement original, BoundStatement rewritten)
+        public virtual BoundStatement InstrumentIfStatementConditionalGoto(BoundIfStatement original, BoundStatement rewritten)
         {
             Debug.Assert(original.Syntax.Kind() == SyntaxKind.IfStatement);
             return InstrumentStatement(original, rewritten);
@@ -199,12 +209,48 @@ namespace Microsoft.CodeAnalysis.CSharp
             return InstrumentStatement(original, rewritten);
         }
 
-        public virtual BoundStatement InstrumentLocalInitialization(BoundLocalDeclaration original, BoundStatement rewritten)
+        public virtual BoundStatement InstrumentUserDefinedLocalInitialization(BoundLocalDeclaration original, BoundStatement rewritten)
         {
             Debug.Assert(original.Syntax.Kind() == SyntaxKind.VariableDeclarator ||
                          (original.Syntax.Kind() == SyntaxKind.LocalDeclarationStatement &&
                                 ((LocalDeclarationStatementSyntax)original.Syntax).Declaration.Variables.Count == 1));
             return InstrumentStatement(original, rewritten);
+        }
+
+        public virtual BoundExpression InstrumentUserDefinedLocalAssignment(BoundAssignmentOperator original)
+        {
+            Debug.Assert(original.Left is BoundLocal { LocalSymbol.SynthesizedKind: SynthesizedLocalKind.UserDefined } or BoundParameter);
+
+            return original;
+        }
+
+        public virtual BoundExpression InstrumentCall(BoundCall original, BoundExpression rewritten)
+        {
+            return rewritten;
+        }
+
+        /// <summary>
+        /// Similarly to an interceptor, gives the instrumenter an opportunity to adjust call target, receiver and arguments.
+        /// </summary>
+        /// <remarks>
+        /// Unlike interceptors, called also for constructor calls (with <paramref name="receiver"/> being null).
+        /// </remarks>
+        public virtual void InterceptCallAndAdjustArguments(
+            ref MethodSymbol method,
+            ref BoundExpression? receiver,
+            ref ImmutableArray<BoundExpression> arguments,
+            ref ImmutableArray<RefKind> argumentRefKindsOpt)
+        {
+        }
+
+        public virtual BoundExpression InstrumentObjectCreationExpression(BoundObjectCreationExpression original, BoundExpression rewritten)
+        {
+            return rewritten;
+        }
+
+        public virtual BoundExpression InstrumentFunctionPointerInvocation(BoundFunctionPointerInvocation original, BoundExpression rewritten)
+        {
+            return rewritten;
         }
 
         public virtual BoundStatement InstrumentLockTargetCapture(BoundLockStatement original, BoundStatement lockTargetCapture)
@@ -244,13 +290,16 @@ namespace Microsoft.CodeAnalysis.CSharp
             return usingTargetCapture;
         }
 
-        public virtual BoundExpression InstrumentCatchClauseFilter(BoundCatchBlock original, BoundExpression rewrittenFilter, SyntheticBoundNodeFactory factory)
+        public virtual void InstrumentCatchBlock(
+            BoundCatchBlock original,
+            ref BoundExpression? rewrittenSource,
+            ref BoundStatementList? rewrittenFilterPrologue,
+            ref BoundExpression? rewrittenFilter,
+            ref BoundBlock rewrittenBody,
+            ref TypeSymbol? rewrittenType,
+            SyntheticBoundNodeFactory factory)
         {
-            Debug.Assert(!original.WasCompilerGenerated);
             Debug.Assert(original.Syntax.Kind() == SyntaxKind.CatchClause);
-            Debug.Assert(((CatchClauseSyntax)original.Syntax).Filter != null);
-            Debug.Assert(factory != null);
-            return rewrittenFilter;
         }
 
         public virtual BoundExpression InstrumentSwitchStatementExpression(BoundStatement original, BoundExpression rewrittenExpression, SyntheticBoundNodeFactory factory)

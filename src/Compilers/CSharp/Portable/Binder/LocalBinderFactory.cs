@@ -12,6 +12,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using ReferenceEqualityComparer = Roslyn.Utilities.ReferenceEqualityComparer;
 
 namespace Microsoft.CodeAnalysis.CSharp
@@ -160,10 +161,20 @@ namespace Microsoft.CodeAnalysis.CSharp
             Visit(node.ExpressionBody, enclosing);
         }
 
+        public override void VisitClassDeclaration(ClassDeclarationSyntax node)
+        {
+            VisitTypeDeclaration(node);
+        }
+
         public override void VisitRecordDeclaration(RecordDeclarationSyntax node)
         {
+            VisitTypeDeclaration(node);
+        }
+
+        private void VisitTypeDeclaration(TypeDeclarationSyntax node)
+        {
             Debug.Assert(node.ParameterList is object);
-            Debug.Assert(node.IsKind(SyntaxKind.RecordDeclaration));
+            Debug.Assert(node.Kind() is SyntaxKind.RecordDeclaration or SyntaxKind.ClassDeclaration);
 
             Visit(node.PrimaryConstructorBaseTypeIfClass);
         }
@@ -230,8 +241,48 @@ namespace Microsoft.CodeAnalysis.CSharp
                 return;
             }
 
-            base.VisitInvocationExpression(node);
+            if (receiverIsInvocation(node, out InvocationExpressionSyntax? nested))
+            {
+                var invocations = ArrayBuilder<InvocationExpressionSyntax>.GetInstance();
+
+                invocations.Push(node);
+
+                node = nested;
+                while (receiverIsInvocation(node, out nested))
+                {
+                    invocations.Push(node);
+                    node = nested;
+                }
+
+                Visit(node.Expression);
+
+                do
+                {
+                    Visit(node.ArgumentList);
+                }
+                while (invocations.TryPop(out node!));
+
+                invocations.Free();
+            }
+            else
+            {
+                Visit(node.Expression);
+                Visit(node.ArgumentList);
+            }
+
             return;
+
+            static bool receiverIsInvocation(InvocationExpressionSyntax node, [NotNullWhen(true)] out InvocationExpressionSyntax? nested)
+            {
+                if (node.Expression is MemberAccessExpressionSyntax { Expression: InvocationExpressionSyntax receiver } && !receiver.MayBeNameofOperator())
+                {
+                    nested = receiver;
+                    return true;
+                }
+
+                nested = null;
+                return false;
+            }
 
             static Symbol getAttributeTarget(Binder current)
             {
@@ -365,7 +416,9 @@ namespace Microsoft.CodeAnalysis.CSharp
                     ? new WithMethodTypeParametersBinder(match, _enclosing)
                     : _enclosing;
 
-                binder = binder.WithUnsafeRegionIfNecessary(node.Modifiers);
+                binder = binder.SetOrClearUnsafeRegionIfNecessary(node.Modifiers,
+                    isIteratorBody: match.IsIterator);
+
                 binder = new InMethodBinder(match, binder);
             }
 
@@ -400,7 +453,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             {
                 foreach (var candidate in possibleScopeBinder.LocalFunctions)
                 {
-                    if (candidate.Locations[0] == node.Identifier.GetLocation())
+                    if (candidate.GetFirstLocation() == node.Identifier.GetLocation())
                     {
                         match = candidate;
                     }
@@ -596,6 +649,12 @@ namespace Microsoft.CodeAnalysis.CSharp
             var binder = new ForEachLoopBinder(patternBinder, node);
             AddToMap(node, binder);
 
+            if (node is ForEachVariableStatementSyntax forEachVariable && !forEachVariable.Variable.IsDeconstructionLeft())
+            {
+                // We will bind this expression for error recovery, anything could be there
+                Visit(forEachVariable.Variable, binder);
+            }
+
             VisitPossibleEmbeddedStatement(node.Statement, binder);
         }
 
@@ -737,11 +796,47 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
         }
 
+        public override void VisitBinaryPattern(BinaryPatternSyntax node)
+        {
+            // Users (such as ourselves) can have many, many nested binary patterns. To avoid crashing, do left recursion manually.
+            while (true)
+            {
+                Visit(node.Right);
+                if (node.Left is not BinaryPatternSyntax binOp)
+                {
+                    Visit(node.Left);
+                    break;
+                }
+
+                node = binOp;
+            }
+        }
+
         public override void VisitIfStatement(IfStatementSyntax node)
         {
-            Visit(node.Condition, _enclosing);
-            VisitPossibleEmbeddedStatement(node.Statement, _enclosing);
-            Visit(node.Else, _enclosing);
+            Binder enclosing = _enclosing;
+            while (true)
+            {
+                Visit(node.Condition, enclosing);
+                VisitPossibleEmbeddedStatement(node.Statement, enclosing);
+
+                if (node.Else == null)
+                {
+                    break;
+                }
+
+                var elseStatementSyntax = node.Else.Statement;
+                if (elseStatementSyntax is IfStatementSyntax ifStatementSyntax)
+                {
+                    node = ifStatementSyntax;
+                    enclosing = GetBinderForPossibleEmbeddedStatement(node, enclosing);
+                }
+                else
+                {
+                    VisitPossibleEmbeddedStatement(elseStatementSyntax, enclosing);
+                    break;
+                }
+            }
         }
 
         public override void VisitElseClause(ElseClauseSyntax node)
@@ -851,7 +946,18 @@ namespace Microsoft.CodeAnalysis.CSharp
         public override void VisitVariableDeclarator(VariableDeclaratorSyntax node)
         {
             Visit(node.ArgumentList);
-            Visit(node.Initializer?.Value);
+
+            if (node.Initializer is { } initializer)
+            {
+                var enclosing = _enclosing;
+                if (node.Parent is VariableDeclarationSyntax { Parent: LocalDeclarationStatementSyntax { IsConst: true } })
+                {
+                    enclosing = new LocalInProgressBinder(initializer, _enclosing);
+                    AddToMap(initializer, enclosing);
+                }
+
+                Visit(initializer.Value, enclosing);
+            }
         }
 
         public override void VisitReturnStatement(ReturnStatementSyntax node)
@@ -960,23 +1066,29 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
         }
 
+        private Binder GetBinderForPossibleEmbeddedStatement(StatementSyntax statement, Binder enclosing)
+        {
+            CSharpSyntaxNode embeddedScopeDesignator;
+            // Some statements by default do not introduce its own scope for locals.
+            // For example: Expression Statement, Return Statement, etc. However,
+            // when a statement like that is an embedded statement (like IfStatementSyntax.Statement),
+            // then it should introduce a scope for locals declared within it. Here we are detecting
+            // such statements and creating a binder that should own the scope.
+            enclosing = GetBinderForPossibleEmbeddedStatement(statement, enclosing, out embeddedScopeDesignator);
+
+            if (embeddedScopeDesignator != null)
+            {
+                AddToMap(embeddedScopeDesignator, enclosing);
+            }
+
+            return enclosing;
+        }
+
         private void VisitPossibleEmbeddedStatement(StatementSyntax statement, Binder enclosing)
         {
             if (statement != null)
             {
-                CSharpSyntaxNode embeddedScopeDesignator;
-                // Some statements by default do not introduce its own scope for locals.
-                // For example: Expression Statement, Return Statement, etc. However,
-                // when a statement like that is an embedded statement (like IfStatementSyntax.Statement),
-                // then it should introduce a scope for locals declared within it. Here we are detecting
-                // such statements and creating a binder that should own the scope.
-                enclosing = GetBinderForPossibleEmbeddedStatement(statement, enclosing, out embeddedScopeDesignator);
-
-                if (embeddedScopeDesignator != null)
-                {
-                    AddToMap(embeddedScopeDesignator, enclosing);
-                }
-
+                enclosing = GetBinderForPossibleEmbeddedStatement(statement, enclosing);
                 Visit(statement, enclosing);
             }
         }

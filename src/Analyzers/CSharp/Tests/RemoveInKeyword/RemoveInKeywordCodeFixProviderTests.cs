@@ -11,255 +11,284 @@ using Microsoft.CodeAnalysis.Test.Utilities;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.RemoveInKeyword
+namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.RemoveInKeyword;
+
+[Trait(Traits.Feature, Traits.Features.CodeActionsRemoveInKeyword)]
+public class RemoveInKeywordCodeFixProviderTests : AbstractCSharpDiagnosticProviderBasedUserDiagnosticTest_NoEditor
 {
-    [Trait(Traits.Feature, Traits.Features.CodeActionsRemoveInKeyword)]
-    public class RemoveInKeywordCodeFixProviderTests : AbstractCSharpDiagnosticProviderBasedUserDiagnosticTest
+    public RemoveInKeywordCodeFixProviderTests(ITestOutputHelper logger)
+      : base(logger)
     {
-        public RemoveInKeywordCodeFixProviderTests(ITestOutputHelper logger)
-          : base(logger)
-        {
-        }
-
-        internal override (DiagnosticAnalyzer?, CodeFixProvider) CreateDiagnosticProviderAndFixer(Workspace workspace)
-            => (null, new RemoveInKeywordCodeFixProvider());
-
-        [Fact]
-        public async Task TestRemoveInKeyword()
-        {
-            await TestInRegularAndScript1Async(
-@"class Class
-{
-    void M(int i) { }
-    void N(int i)
-    {
-        M(in [|i|]);
-    }
-}",
-@"class Class
-{
-    void M(int i) { }
-    void N(int i)
-    {
-        M(i);
-    }
-}");
-        }
-
-        [Fact]
-        public async Task TestRemoveInKeywordMultipleArguments1()
-        {
-            await TestInRegularAndScript1Async(
-@"class Class
-{
-    void M(int i, string s) { }
-    void N(int i, string s)
-    {
-        M(in [|i|], s);
-    }
-}",
-@"class Class
-{
-    void M(int i, string s) { }
-    void N(int i, string s)
-    {
-        M(i, s);
-    }
-}");
-        }
-
-        [Fact]
-        public async Task TestRemoveInKeywordMultipleArguments2()
-        {
-            await TestInRegularAndScript1Async(
-@"class Class
-{
-    void M(int i, int j) { }
-    void N(int i, int j)
-    {
-        M(in [|i|], in j);
-    }
-}",
-@"class Class
-{
-    void M(int i, int j) { }
-    void N(int i, int j)
-    {
-        M(i, in j);
-    }
-}");
-        }
-
-        [Fact]
-        public async Task TestRemoveInKeywordMultipleArgumentsWithDifferentRefKinds()
-        {
-            await TestInRegularAndScript1Async(
-@"class Class
-{
-    void M(in int i, string s) { }
-    void N(int i, string s)
-    {
-        M(in i, in [|s|]);
-    }
-}",
-@"class Class
-{
-    void M(in int i, string s) { }
-    void N(int i, string s)
-    {
-        M(in i, s);
-    }
-}");
-        }
-
-        [Fact]
-        public async Task TestDontRemoveInKeyword()
-        {
-            await TestMissingInRegularAndScriptAsync(
-@"class Class
-{
-    void M(in int i) { }
-    void N(int i)
-    {
-        M(in [|i|]);
-    }
-}");
-        }
-
-        [Theory]
-        [InlineData("in    [|i|]", "i")]
-        [InlineData("  in  [|i|]", "  i")]
-        [InlineData("/* start */in [|i|]", "/* start */i")]
-        [InlineData("/* start */ in [|i|]", "/* start */ i")]
-        [InlineData(
-            "/* start */ in [|i|] /* end */",
-            "/* start */ i /* end */")]
-        [InlineData(
-            "/* start */ in /* middle */ [|i|] /* end */",
-            "/* start */ i /* end */")]
-        [InlineData(
-            "/* start */ in    /* middle */ [|i|] /* end */",
-            "/* start */ i /* end */")]
-        [InlineData(
-            "/* start */in /* middle */ [|i|] /* end */",
-            "/* start */i /* end */")]
-        public async Task TestRemoveInKeywordWithTrivia(string original, string expected)
-        {
-            await TestInRegularAndScript1Async(
-$@"class App
-{{
-    void M(int i) {{ }}
-    void N(int i)
-    {{
-        M({original});
-    }}
-
-}}",
-$@"class App
-{{
-    void M(int i) {{ }}
-    void N(int i)
-    {{
-        M({expected});
-    }}
-
-}}");
-        }
-
-        [Fact]
-        public async Task TestRemoveInKeywordFixAllInDocument1()
-        {
-            await TestInRegularAndScript1Async(
-@"class Class
-{
-    void M1(int i) { }
-    void M2(int i, string s) { }
-
-    void N1(int i)
-    {
-        M1(in {|FixAllInDocument:i|});
     }
 
-    void N2(int i, string s)
+    internal override (DiagnosticAnalyzer?, CodeFixProvider) CreateDiagnosticProviderAndFixer(Workspace workspace)
+        => (null, new RemoveInKeywordCodeFixProvider());
+
+    [Fact]
+    public async Task TestRemoveInKeyword()
     {
-        M2(in i, in s);
+        await TestInRegularAndScript1Async(
+            """
+            class Class
+            {
+                void M(int i) { }
+                void N(int i)
+                {
+                    M(in [|i|]);
+                }
+            }
+            """,
+            """
+            class Class
+            {
+                void M(int i) { }
+                void N(int i)
+                {
+                    M(i);
+                }
+            }
+            """);
     }
 
-    void N3(int i, string s)
+    [Fact]
+    public async Task TestRemoveInKeywordMultipleArguments1()
     {
-        M1(in i);
-        M2(in i, in s);
-    }
-}",
-@"class Class
-{
-    void M1(int i) { }
-    void M2(int i, string s) { }
-
-    void N1(int i)
-    {
-        M1(i);
-    }
-
-    void N2(int i, string s)
-    {
-        M2(i, s);
-    }
-
-    void N3(int i, string s)
-    {
-        M1(i);
-        M2(i, s);
-    }
-}");
-        }
-
-        [Fact]
-        public async Task TestRemoveInKeywordFixAllInDocument2()
-        {
-            await TestInRegularAndScript1Async(
-@"class Class
-{
-    void M1(int i) { }
-    void M2(in int i, string s) { }
-
-    void N1(int i)
-    {
-        M1(in {|FixAllInDocument:i|});
+        await TestInRegularAndScript1Async(
+            """
+            class Class
+            {
+                void M(int i, string s) { }
+                void N(int i, string s)
+                {
+                    M(in [|i|], s);
+                }
+            }
+            """,
+            """
+            class Class
+            {
+                void M(int i, string s) { }
+                void N(int i, string s)
+                {
+                    M(i, s);
+                }
+            }
+            """);
     }
 
-    void N2(int i, string s)
+    [Fact]
+    public async Task TestRemoveInKeywordMultipleArguments2()
     {
-        M2(in i, in s);
+        await TestInRegularAndScript1Async(
+            """
+            class Class
+            {
+                void M(int i, int j) { }
+                void N(int i, int j)
+                {
+                    M(in [|i|], in j);
+                }
+            }
+            """,
+            """
+            class Class
+            {
+                void M(int i, int j) { }
+                void N(int i, int j)
+                {
+                    M(i, in j);
+                }
+            }
+            """);
     }
 
-    void N3(int i, string s)
+    [Fact]
+    public async Task TestRemoveInKeywordMultipleArgumentsWithDifferentRefKinds()
     {
-        M1(in i);
-        M2(in i, in s);
+        await TestInRegularAndScript1Async(
+            """
+            class Class
+            {
+                void M(in int i, string s) { }
+                void N(int i, string s)
+                {
+                    M(in i, in [|s|]);
+                }
+            }
+            """,
+            """
+            class Class
+            {
+                void M(in int i, string s) { }
+                void N(int i, string s)
+                {
+                    M(in i, s);
+                }
+            }
+            """);
     }
-}",
-@"class Class
-{
-    void M1(int i) { }
-    void M2(in int i, string s) { }
 
-    void N1(int i)
+    [Fact]
+    public async Task TestDoNotRemoveInKeyword()
     {
-        M1(i);
+        await TestMissingInRegularAndScriptAsync(
+            """
+            class Class
+            {
+                void M(in int i) { }
+                void N(int i)
+                {
+                    M(in [|i|]);
+                }
+            }
+            """);
     }
 
-    void N2(int i, string s)
+    [Theory]
+    [InlineData("in    [|i|]", "i")]
+    [InlineData("  in  [|i|]", "  i")]
+    [InlineData("/* start */in [|i|]", "/* start */i")]
+    [InlineData("/* start */ in [|i|]", "/* start */ i")]
+    [InlineData(
+        "/* start */ in [|i|] /* end */",
+        "/* start */ i /* end */")]
+    [InlineData(
+        "/* start */ in /* middle */ [|i|] /* end */",
+        "/* start */ i /* end */")]
+    [InlineData(
+        "/* start */ in    /* middle */ [|i|] /* end */",
+        "/* start */ i /* end */")]
+    [InlineData(
+        "/* start */in /* middle */ [|i|] /* end */",
+        "/* start */i /* end */")]
+    public async Task TestRemoveInKeywordWithTrivia(string original, string expected)
     {
-        M2(in i, s);
+        await TestInRegularAndScript1Async(
+            $$"""
+            class App
+            {
+                void M(int i) { }
+                void N(int i)
+                {
+                    M({{original}});
+                }
+
+            }
+            """,
+            $$"""
+            class App
+            {
+                void M(int i) { }
+                void N(int i)
+                {
+                    M({{expected}});
+                }
+
+            }
+            """);
     }
 
-    void N3(int i, string s)
+    [Fact]
+    public async Task TestRemoveInKeywordFixAllInDocument1()
     {
-        M1(i);
-        M2(in i, s);
+        await TestInRegularAndScript1Async(
+            """
+            class Class
+            {
+                void M1(int i) { }
+                void M2(int i, string s) { }
+
+                void N1(int i)
+                {
+                    M1(in {|FixAllInDocument:i|});
+                }
+
+                void N2(int i, string s)
+                {
+                    M2(in i, in s);
+                }
+
+                void N3(int i, string s)
+                {
+                    M1(in i);
+                    M2(in i, in s);
+                }
+            }
+            """,
+            """
+            class Class
+            {
+                void M1(int i) { }
+                void M2(int i, string s) { }
+
+                void N1(int i)
+                {
+                    M1(i);
+                }
+
+                void N2(int i, string s)
+                {
+                    M2(i, s);
+                }
+
+                void N3(int i, string s)
+                {
+                    M1(i);
+                    M2(i, s);
+                }
+            }
+            """);
     }
-}");
-        }
+
+    [Fact]
+    public async Task TestRemoveInKeywordFixAllInDocument2()
+    {
+        await TestInRegularAndScript1Async(
+            """
+            class Class
+            {
+                void M1(int i) { }
+                void M2(in int i, string s) { }
+
+                void N1(int i)
+                {
+                    M1(in {|FixAllInDocument:i|});
+                }
+
+                void N2(int i, string s)
+                {
+                    M2(in i, in s);
+                }
+
+                void N3(int i, string s)
+                {
+                    M1(in i);
+                    M2(in i, in s);
+                }
+            }
+            """,
+            """
+            class Class
+            {
+                void M1(int i) { }
+                void M2(in int i, string s) { }
+
+                void N1(int i)
+                {
+                    M1(i);
+                }
+
+                void N2(int i, string s)
+                {
+                    M2(in i, s);
+                }
+
+                void N3(int i, string s)
+                {
+                    M1(i);
+                    M2(in i, s);
+                }
+            }
+            """);
     }
 }

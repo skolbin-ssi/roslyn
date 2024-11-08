@@ -2,13 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-#nullable disable
-
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using Microsoft.CodeAnalysis.CodeGen;
 using Microsoft.CodeAnalysis.CSharp.Symbols;
+using Microsoft.CodeAnalysis.Emit;
 using Microsoft.CodeAnalysis.PooledObjects;
 using Roslyn.Utilities;
 
@@ -45,22 +44,24 @@ namespace Microsoft.CodeAnalysis.CSharp
         /// </summary>
         private readonly ResumableStateMachineStateAllocator _iteratorStateAllocator;
 
-        internal AsyncIteratorMethodToStateMachineRewriter(MethodSymbol method,
+        internal AsyncIteratorMethodToStateMachineRewriter(
+            MethodSymbol method,
             int methodOrdinal,
             AsyncMethodBuilderMemberCollection asyncMethodBuilderMemberCollection,
             AsyncIteratorInfo asyncIteratorInfo,
             SyntheticBoundNodeFactory F,
             FieldSymbol state,
             FieldSymbol builder,
-            Roslyn.Utilities.IReadOnlySet<Symbol> hoistedVariables,
+            FieldSymbol? instanceIdField,
+            IReadOnlySet<Symbol> hoistedVariables,
             IReadOnlyDictionary<Symbol, CapturedSymbolReplacement> nonReusableLocalProxies,
             SynthesizedLocalOrdinalsDispenser synthesizedLocalOrdinals,
             ArrayBuilder<StateMachineStateDebugInfo> stateMachineStateDebugInfoBuilder,
-            VariableSlotAllocator slotAllocatorOpt,
+            VariableSlotAllocator? slotAllocatorOpt,
             int nextFreeHoistedLocalSlot,
             BindingDiagnosticBag diagnostics)
             : base(method, methodOrdinal, asyncMethodBuilderMemberCollection, F,
-                  state, builder, hoistedVariables, nonReusableLocalProxies, synthesizedLocalOrdinals,
+                  state, builder, instanceIdField, hoistedVariables, nonReusableLocalProxies, synthesizedLocalOrdinals,
                   stateMachineStateDebugInfoBuilder, slotAllocatorOpt, nextFreeHoistedLocalSlot, diagnostics)
         {
             Debug.Assert(asyncIteratorInfo != null);
@@ -75,12 +76,11 @@ namespace Microsoft.CodeAnalysis.CSharp
                 increasing: false);
         }
 
-#nullable enable
         protected override BoundStatement? GenerateMissingStateDispatch()
         {
             var asyncDispatch = base.GenerateMissingStateDispatch();
 
-            var iteratorDispatch = _iteratorStateAllocator.GenerateThrowMissingStateDispatch(F, F.Local(cachedState), CodeAnalysisResources.EncCannotResumeSuspendedIteratorMethod);
+            var iteratorDispatch = _iteratorStateAllocator.GenerateThrowMissingStateDispatch(F, F.Local(cachedState), HotReloadExceptionCode.CannotResumeSuspendedIteratorMethod);
             if (iteratorDispatch == null)
             {
                 return asyncDispatch;
@@ -263,7 +263,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             //  _promiseOfValueOrEnd.SetResult(true);
             //  return;
 
-            AddResumableState(_iteratorStateAllocator, node.Syntax, out var stateNumber, out GeneratedLabelSymbol resumeLabel);
+            AddResumableState(_iteratorStateAllocator, node.Syntax, awaitId: default, out var stateNumber, out GeneratedLabelSymbol resumeLabel);
 
             var rewrittenExpression = (BoundExpression)Visit(node.Expression);
             var blockBuilder = ArrayBuilder<BoundStatement>.GetInstance();

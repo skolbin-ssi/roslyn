@@ -202,7 +202,7 @@ End Class"
                 End Sub)
         End Sub
 
-        <Fact, WorkItem(13948, "https://github.com/dotnet/roslyn/issues/13948")>
+        <Fact, WorkItem("https://github.com/dotnet/roslyn/issues/13948")>
         Public Sub Local()
             Const source =
 "class C
@@ -242,7 +242,7 @@ End Class"
                 End Sub)
         End Sub
 
-        <Fact, WorkItem(13948, "https://github.com/dotnet/roslyn/issues/13948")>
+        <Fact, WorkItem("https://github.com/dotnet/roslyn/issues/13948")>
         Public Sub Constant()
             Const source =
 "class A<T>
@@ -290,7 +290,7 @@ class C
                 End Sub)
         End Sub
 
-        <Fact, WorkItem(13803, "https://github.com/dotnet/roslyn/issues/13803")>
+        <Fact, WorkItem("https://github.com/dotnet/roslyn/issues/13803")>
         Public Sub LongTupleLocalElement_NoNames()
             Const source =
 "Class C
@@ -421,7 +421,7 @@ End Class"
                            End Sub)
         End Sub
 
-        <Fact, WorkItem(13589, "https://github.com/dotnet/roslyn/issues/13589")>
+        <Fact, WorkItem("https://github.com/dotnet/roslyn/issues/13589")>
         Public Sub [Alias]()
             Const source =
 "Class C
@@ -429,8 +429,8 @@ End Class"
     Shared Sub M()
     End Sub
 End Class"
-            Dim comp = CreateCompilationWithMscorlib40({source}, references:={ValueTupleRef, SystemRuntimeFacadeRef}, options:=TestOptions.DebugDll)
-            WithRuntimeInstance(comp, {MscorlibRef, ValueTupleRef, SystemRuntimeFacadeRef},
+            Dim comp = CreateCompilationWithMscorlib40({source}, references:={ValueTupleLegacyRef, SystemRuntimeFacadeRef}, options:=TestOptions.DebugDll)
+            WithRuntimeInstance(comp, {MscorlibRef, ValueTupleLegacyRef, SystemRuntimeFacadeRef},
                 Sub(runtime)
                     Dim context = CreateMethodContext(runtime, "C.M")
                     Dim locals = ArrayBuilder(Of LocalAndMethod).GetInstance()
@@ -479,7 +479,7 @@ End Class"
                 End Sub)
         End Sub
 
-        <Fact, WorkItem(13803, "https://github.com/dotnet/roslyn/issues/13803")>
+        <Fact, WorkItem("https://github.com/dotnet/roslyn/issues/13803")>
         Public Sub AliasElement_NoNames()
             Const source =
 "Class C
@@ -487,9 +487,9 @@ End Class"
     Shared Sub M()
     End Sub
 End Class"
-            Dim comp = CreateCompilationWithMscorlib40({source}, references:={SystemRuntimeFacadeRef, ValueTupleRef}, options:=TestOptions.DebugDll)
+            Dim comp = CreateCompilationWithMscorlib40({source}, references:={SystemRuntimeFacadeRef, ValueTupleLegacyRef}, options:=TestOptions.DebugDll)
             WithRuntimeInstance(comp,
-                {MscorlibRef, SystemCoreRef, SystemRuntimeFacadeRef, ValueTupleRef},
+                {MscorlibRef, SystemCoreRef, SystemRuntimeFacadeRef, ValueTupleLegacyRef},
                 Sub(runtime)
                     Dim context = CreateMethodContext(runtime, "C.M")
                     Dim [alias] = New [Alias](
